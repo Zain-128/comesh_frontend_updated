@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "684910101260",
+    "project_id": "comesh-fb418",
+    "storage_bucket": "comesh-fb418.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:684910101260:android:bfcb574ff6b9149ceabf29",
+        "android_client_info": {
+          "package_name": "com.comesh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBa7qnhexa7fR5vdA6tky4GI2YJWz10hxI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
