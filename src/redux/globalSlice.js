@@ -211,7 +211,7 @@ const globalSlice = createSlice({
           state.messages = {
             ...action.payload.data,
             data: [
-              ...state.chats.data,
+              ...(state.messages?.data || []),
               ...action.payload.data.data
             ]
           }

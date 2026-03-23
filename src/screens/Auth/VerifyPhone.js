@@ -1,5 +1,4 @@
 import { useNavigation } from '@react-navigation/native';
-import QB from "quickblox-react-native-sdk";
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
@@ -95,15 +94,6 @@ const VerifyPhone = (propss) => {
       otp: value,
       callback: (data) => {
         console.warn(data)
-        if (!data?.isFirstTime)
-          QB.auth.login({
-            login: data?.data?.quickBloxUsername,
-            password: data?.data?.quickBloxPassword
-          }).then((v) => {
-            console.warn("Logged in QB", v.user)
-          }).catch((reason) => {
-            console.warn("Failed to login QB", reason)
-          })
         // if (data?.isFirstTime)
         //   navigation.navigate('Signup')
         // else

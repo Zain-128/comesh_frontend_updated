@@ -210,7 +210,8 @@ const Home = props => {
                 outputCardOpacityRangeY={[0, 1, 1, 1, 1]}
                 animateOverlayLabelsOpacity
                 renderCard={(card, cardIndex) => {
-                  let video = card?.profileVideo;
+                  const video = helper.resolveMediaUrl(card?.profileVideo);
+                  const poster = helper.resolveMediaUrl(card?.profileVideoThumbnail || card?.profileImage);
                   //images.dummy_video5
                   return (
                     <View style={{
@@ -220,8 +221,10 @@ const Home = props => {
                       <Video
                         paused={cardIndex == currentIndex ? false : true}
                         repeat={true}
-                        muted={false}
+                        muted={true}
                         source={video ? { uri: video } : images.dummy_video5}
+                        poster={poster || undefined}
+                        posterResizeMode="cover"
                         resizeMode={'cover'}
                         style={{
                           ...StyleSheet.absoluteFill,

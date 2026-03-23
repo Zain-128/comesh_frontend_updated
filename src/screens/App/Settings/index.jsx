@@ -1,4 +1,3 @@
-import QB from "quickblox-react-native-sdk";
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
@@ -20,6 +19,7 @@ import colors from '../../../constants/colors';
 import { ContentType } from '../../../constants/endPoints';
 import { fontsFamily, fontsSize } from '../../../constants/fonts';
 import { logoutUser } from '../../../redux/userSlice';
+import chatSocket from '../../../utils/chatSocket';
 import Header from './Header';
 
 const Settings = props => {
@@ -34,9 +34,7 @@ const Settings = props => {
 
 
   const logout = () => {
-    QB.chat.disconnect();
-    QB.auth.clearSession()
-    QB.auth.logout();
+    chatSocket.disconnect();
     dispatch(logoutUser())
   }
 

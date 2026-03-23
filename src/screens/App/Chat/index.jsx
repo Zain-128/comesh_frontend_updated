@@ -1,8 +1,7 @@
 import { BlurView } from "@react-native-community/blur";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import moment from "moment";
-import QB from "quickblox-react-native-sdk";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,7 +12,6 @@ import {
   View,
 } from "react-native";
 import { widthPercentageToDP } from "react-native-responsive-screen";
-import Video from "react-native-video";
 import { useDispatch, useSelector } from "react-redux";
 import Text from "../../../components/Text";
 import { Typography } from "../../../components/Typography";
@@ -21,9 +19,9 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import colors from "../../../constants/colors";
 import { IMAGES } from "../../../constants/images";
 import Actions from "../../../redux/actions/globalActions";
+import chatSocket from "../../../utils/chatSocket";
+import helper from "../../../utils/helper";
 import Header from "./Header";
-
-let userQB = null;
 
 const Chat = (props) => {
 
@@ -32,7 +30,6 @@ const Chat = (props) => {
   const [loadingLikes, setLoadingLikes] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [likeUsers, setLikeUsers] = useState([]);
-  const videoRef = useRef(null);
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const { chats } = useSelector(state => state.globalState);
@@ -54,21 +51,16 @@ const Chat = (props) => {
     // };
     // id:"139459918"
 
-    // QB.auth.login({
-    //   login: userData.quickBloxUsername,
-    //   password: userData.quickBloxPassword
-    // }).then((resp) => {
-    //   console.warn(resp.user.id)
-    //   userQB = resp.user;
-    //   console.warn("Logged in")
+    chatSocket.connect({
+      token,
+      userId: userData?._id,
+    });
 
-    QB.chat.connect({
-      password: userData.quickBloxPassword,
-      userId: userData.quickBloxId
-    }).then((v) => {
-      console.warn("Connected To Chat")
-    })
-    //  })
+    const offChatUpdated = chatSocket.on("chat-updated", () => {
+      dispatch(Actions.GetChats({
+        callback: () => { },
+      }));
+    });
 
     dispatch(Actions.getLikesUsers({
       callback: (data) => {
@@ -84,6 +76,10 @@ const Chat = (props) => {
         setLoading(false);
       }
     }));
+
+    return () => {
+      offChatUpdated?.();
+    };
   }, [])
 
 
@@ -138,13 +134,15 @@ const Chat = (props) => {
                 <TouchableOpacity onPress={() => props.navigation.navigate('UserProfile', { userID: item?._id })} style={{ width: widthPercentageToDP(25), height: widthPercentageToDP(30), marginBottom: 12 }}>
                   <ImageBackground style={{ flex: 1, overflow: "hidden", alignItems: 'center', justifyContent: "center" }} resizeMode="stretch" source={require("../../../assets/images/likeBorder.png")}>
                     <View style={{ borderRadius: 15, overflow: 'hidden', width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}>
-                      <Video
-                        ref={videoRef}
-                        onLoad={(p) => {
-                          if (videoRef.current)
-                            videoRef.current.seek(1000);
+                      <Image
+                        source={{
+                          uri: helper.resolveMediaUrl(
+                            item?.profileVideoThumbnail || item?.profileImage || item?.profileVideo
+                          ),
                         }}
-                        muted paused source={{ uri: item.profileVideo }} resizeMode="cover" style={{ width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }} />
+                        resizeMode="cover"
+                        style={{ width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}
+                      />
                       <BlurView
                         style={{ ...StyleSheet.absoluteFill }}
                         blurType="light"
@@ -202,7 +200,7 @@ const Chat = (props) => {
 
 const ListItem = ({ item, index, navigation, userData }) => {
   return (
-    <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item, userQB })}>
+    <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item })}>
       <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/6596/6596121.png" }} style={styles.itemImage} />
       <View style={styles.itemContent}>
         <View style={{ flex: 1 }}>

@@ -30,6 +30,7 @@ const MyProfile = props => {
 
   const { userData } = useSelector(state => state.user)
   const [paused, setPaused] = useState(false)
+  const [profileVideoFailed, setProfileVideoFailed] = useState(false);
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -105,7 +106,28 @@ const MyProfile = props => {
             </View>
           </View>
 
-          <Video paused={paused} repeat={true} source={{ uri: userData?.profileVideo }} resizeMode='cover' style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }} />
+          {userData?.profileVideo && !profileVideoFailed ? (
+            <Video
+              paused={paused}
+              repeat={true}
+              source={{ uri: helper.resolveMediaUrl(userData?.profileVideo) }}
+              poster={helper.resolveMediaUrl(userData?.profileVideoThumbnail || userData?.profileImage) || undefined}
+              posterResizeMode="cover"
+              onError={() => setProfileVideoFailed(true)}
+              resizeMode='cover'
+              style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }}
+            />
+          ) : (
+            <Image
+              source={
+                helper.resolveMediaUrl(userData?.profileImage || userData?.profileVideoThumbnail)
+                  ? { uri: helper.resolveMediaUrl(userData?.profileImage || userData?.profileVideoThumbnail) }
+                  : IMAGES.men
+              }
+              resizeMode="cover"
+              style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
+            />
+          )}
           <View style={styles.notchView} />
         </View>
 
@@ -240,7 +262,9 @@ const MyProfile = props => {
               }}>
               {userData?.videos && userData?.videos.map(i => (
                 <Video
-                  source={{ uri: i.url }}
+                  source={{ uri: helper.resolveMediaUrl(i.url) }}
+                  poster={helper.resolveMediaUrl(i.thumbnailUrl || userData?.profileVideoThumbnail) || undefined}
+                  posterResizeMode="cover"
                   paused
                   controls
                   style={{

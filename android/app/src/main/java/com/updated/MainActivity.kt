@@ -1,4 +1,4 @@
-package com.comesh
+package com.updated
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

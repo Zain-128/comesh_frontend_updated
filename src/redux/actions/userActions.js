@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import Toast from "react-native-toast-message";
-import RNFetchBlob from "rn-fetch-blob";
+import RNFetchBlob from "react-native-blob-util";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
 

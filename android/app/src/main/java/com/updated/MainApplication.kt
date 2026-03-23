@@ -1,4 +1,4 @@
-package com.comesh
+package com.updated
 
 import android.app.Application
 import com.facebook.react.PackageList

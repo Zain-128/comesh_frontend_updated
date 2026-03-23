@@ -3,7 +3,7 @@ import moment from 'moment';
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import { authorize } from 'react-native-app-auth';
 import * as RNFS from 'react-native-fs';
-import RNFetchBlob from 'rn-fetch-blob';
+import RNFetchBlob from 'react-native-blob-util';
 
 export default class Dropbox {
   //Get token for dropbox

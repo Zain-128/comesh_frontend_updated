@@ -77,13 +77,17 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.comesh"
+    namespace "com.updated"
     defaultConfig {
-        applicationId "com.comesh"
+        applicationId "com.updated"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [
+            appAuthRedirectScheme: "com.updated",
+            usesCleartextTraffic: "true"
+        ]
     }
     signingConfigs {
         debug {

@@ -32,6 +32,7 @@ const Profile = props => {
 
   const { userData } = useSelector(state => state.user);
   const { othersProfile } = useSelector(state => state.globalState);
+  const [profileVideoFailed, setProfileVideoFailed] = React.useState(false);
   const dispatch = useDispatch();
   const { userID = "" } = props.route.params;
 
@@ -130,7 +131,27 @@ const Profile = props => {
             />
           </TouchableOpacity>
 
-          <Video repeat={true} source={{ uri: othersProfile?.profileVideo }} resizeMode='cover' style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }} />
+          {othersProfile?.profileVideo && !profileVideoFailed ? (
+            <Video
+              repeat={true}
+              source={{ uri: helper.resolveMediaUrl(othersProfile?.profileVideo) }}
+              poster={helper.resolveMediaUrl(othersProfile?.profileVideoThumbnail || othersProfile?.profileImage) || undefined}
+              posterResizeMode="cover"
+              onError={() => setProfileVideoFailed(true)}
+              resizeMode='cover'
+              style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }}
+            />
+          ) : (
+            <Image
+              source={
+                helper.resolveMediaUrl(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail)
+                  ? { uri: helper.resolveMediaUrl(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail) }
+                  : IMAGES.men
+              }
+              resizeMode="cover"
+              style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
+            />
+          )}
           <View style={styles.notchView} />
           <View style={styles.actionView}>
             <TouchableOpacity
@@ -332,7 +353,9 @@ const Profile = props => {
                   activeOpacity={1}
                   style={{}}>
                   <Video
-                    source={{ uri: i.url }}
+                    source={{ uri: helper.resolveMediaUrl(i.url) }}
+                    poster={helper.resolveMediaUrl(i.thumbnailUrl || othersProfile?.profileVideoThumbnail) || undefined}
+                    posterResizeMode="cover"
                     paused
                     controls
                     style={{

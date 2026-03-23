@@ -1,7 +1,6 @@
 import Geolocation from "@react-native-community/geolocation";
 import messaging from "@react-native-firebase/messaging";
 import { CommonActions } from "@react-navigation/native";
-import QB from "quickblox-react-native-sdk";
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Toast from "react-native-toast-message";
@@ -42,7 +41,6 @@ const OnBoard4 = (props) => {
       authorizationLevel: "auto"
     })
     Geolocation.requestAuthorization();
-    QB.auth.logout();
   }, [])
 
 
@@ -91,32 +89,7 @@ const OnBoard4 = (props) => {
 
   const CreateAccount = async (location = null) => {
     dispatch(setLoader(true))
-    let random = Math.random() * 1000
-    const createUserParams = {
-      fullName: userProfile.firstName + " " + userProfile.lastName,
-      login: userProfile.email ? userProfile.email : userProfile.firstName + userProfile.lastName + random,
-      password: (userProfile.firstName + "12345678!").replace(" ", "")
-    };
-
     try {
-      let QBUser;
-
-      await QB.auth.login({
-        login: createUserParams.login,
-        password: createUserParams.password,
-      }).then(async (QBUserExist) => {
-        console.warn("EXIST", QBUserExist)
-        if (QBUserExist.user && QBUserExist.session.userId) {
-          QBUser = QBUserExist.user;
-        }
-        else {
-          QBUser = await QB.users.create(createUserParams);
-        }
-      }).catch(async (re) => {
-        console.warn("NOT EXIST", re, createUserParams)
-        QBUser = await QB.users.create(createUserParams);
-      })
-
       let token = await messaging().getToken();
 
 
@@ -130,17 +103,10 @@ const OnBoard4 = (props) => {
         availabilityFrom: `${Day} ${From}`,
         availabilityTo: `${Day} ${To}`,
         isFirstTime: true,
-        quickBloxId: QBUser.id,
-        quickBloxUsername: QBUser.login,
-        quickBloxPassword: createUserParams.password,
         deviceToken: token,
         timeZone: timezone,
         ...location ? location : {},
         callback: (data) => {
-          QB.auth.login({
-            login: createUserParams.login,
-            password: createUserParams.password
-          })
           props.navigation.dispatch(
             CommonActions.reset({
               index: 0,
@@ -166,41 +132,13 @@ const OnBoard4 = (props) => {
 
   const CreateAccountSkip = async () => {
     dispatch(setLoader(true))
-    let random = Math.random() * 1000
-    const createUserParams = {
-      fullName: userProfile.firstName + " " + userProfile.lastName,
-      login: userProfile.email ? userProfile.email : userProfile.firstName + userProfile.lastName + random,
-      password: (userProfile.firstName + "12345678!").replace(" ", "")
-    };
-
     try {
-      let QBUser;
-
-      await QB.auth.login({
-        login: createUserParams.login,
-        password: createUserParams.password,
-      }).then(async (QBUserExist) => {
-        console.warn("EXIST", QBUserExist)
-        if (QBUserExist.user && QBUserExist.session.userId) {
-          QBUser = QBUserExist.user;
-        }
-        else {
-          QBUser = await QB.users.create(createUserParams);
-        }
-      }).catch(async (re) => {
-        console.warn("NOT EXIST", re)
-        QBUser = await QB.users.create(createUserParams);
-      })
-
       let token = await messaging().getToken();
 
 
       await dispatch(userActions.UpdateProfile({
         ...userProfile,
         deviceToken: token,
-        quickBloxId: QBUser.id,
-        quickBloxUsername: QBUser.login,
-        quickBloxPassword: createUserParams.password,
         isFirstTime: true,
         callback: (data) => {
           props.navigation.dispatch(

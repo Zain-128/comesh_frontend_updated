@@ -15,16 +15,22 @@ const userSlice = createSlice({
       };
     },
     updateUserLikes(state, action) {
+      const likedByMe = state?.userData?.likedByMe || [];
+      const unLikedByMe = state?.userData?.unLikedByMe || [];
       if (action.payload.type == "like") {
-        let arr = state.userData.unLikedByMe.filter((i) => i = !action.payload.userId);
+        let arr = unLikedByMe.filter((i) => i !== action.payload.userId);
         state.userData = {
-          ...state.userData, likedByMe: [...state.userData.likedByMe, action.payload.userId], unLikedByMe: arr
+          ...state.userData,
+          likedByMe: [...new Set([...likedByMe, action.payload.userId])],
+          unLikedByMe: arr
         };
       }
       else {
-        let arr = state.userData.likedByMe.filter((i) => i = !action.payload.userId);
+        let arr = likedByMe.filter((i) => i !== action.payload.userId);
         state.userData = {
-          ...state.userData, unLikedByMe: [...state.userData.unLikedByMe, action.payload.userId], likedByMe: arr
+          ...state.userData,
+          unLikedByMe: [...new Set([...unLikedByMe, action.payload.userId])],
+          likedByMe: arr
         };
       }
 

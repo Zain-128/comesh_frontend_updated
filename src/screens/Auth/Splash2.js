@@ -1,16 +1,21 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, PermissionsAndroid, Platform, StyleSheet, View } from 'react-native';
-import * as Animatable from 'react-native-animatable';
-import LinearGradient from 'react-native-linear-gradient';
+import { Animated, Image, ImageBackground, PermissionsAndroid, Platform, StyleSheet } from 'react-native';
 import {
   widthPercentageToDP
 } from 'react-native-responsive-screen';
-import Video from 'react-native-video';
 
 // local imports
 import notifee, { AndroidImportance } from "@notifee/react-native";
-import messaging from '@react-native-firebase/messaging';
+import { getApp, getApps } from "@react-native-firebase/app";
+import {
+  AuthorizationStatus,
+  getAPNSToken,
+  getMessaging,
+  onMessage,
+  registerDeviceForRemoteMessages,
+  requestPermission,
+} from "@react-native-firebase/messaging";
 import images from '../../assets/images/index';
 import colors from '../../constants/colors';
 
@@ -20,28 +25,35 @@ const Splash2 = () => {
 
 
   async function requestUserPermission() {
-    if (Platform.OS == "android") {
-      PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    if (Platform.OS === "android" && Platform.Version >= 33) {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
     }
-    const authStatus = await messaging().requestPermission();
+    const app = getApp();
+    const messagingInstance = getMessaging(app);
+    const authStatus = await requestPermission(messagingInstance);
     const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL;
 
     if (enabled) {
       console.log('Authorization status:', authStatus);
     }
     if (Platform.OS == 'ios') {
-      if (!messaging().isDeviceRegisteredForRemoteMessages)
-        await messaging().registerDeviceForRemoteMessages().then((resolved) => {
-          console.log("FCM Register Device Result: ", resolved);
-        }, (error) => {
-          console.warn("FCM Register Device ERROR: ", error);
-        });;
+      await registerDeviceForRemoteMessages(messagingInstance).then((resolved) => {
+        console.log("FCM Register Device Result: ", resolved);
+      }, (error) => {
+        console.warn("FCM Register Device ERROR: ", error);
+      });
     }
   }
 
   const RegisterForNotifications = async () => {
+    if (!getApps().length) {
+      // Firebase native app is not configured, skip push setup.
+      return;
+    }
+    const app = getApp();
+    const messagingInstance = getMessaging(app);
     await requestUserPermission();
     let channelId = await notifee.createChannel({
       id: "comesh",
@@ -51,8 +63,8 @@ const Splash2 = () => {
       badge: true,
       importance: AndroidImportance.HIGH
     })
-    await messaging().getAPNSToken();
-    messaging().onMessage((message) => {
+    await getAPNSToken(messagingInstance);
+    onMessage(messagingInstance, (message) => {
       notifee.displayNotification({
         ...message.notification,
         android: {
@@ -63,7 +75,11 @@ const Splash2 = () => {
   }
 
   useEffect(() => {
-    RegisterForNotifications()
+    setTimeout(() => {
+      RegisterForNotifications().catch((error) => {
+        console.warn("Notification setup failed", error?.message || error);
+      });
+    }, 250);
     setTimeout(() => {
       Animated.timing(animatedValue, {
         toValue: 1,
@@ -86,61 +102,11 @@ const Splash2 = () => {
 
   return (
     <>
-      <LinearGradient
-        colors={[colors.primary, colors.secondary]}
-        style={styles.container}>
-        <View style={{ width: '49.5%', justifyContent: 'space-between' }}>
-          <Animatable.View animation={'bounceInLeft'} style={{ height: '33%' }}>
-            <Video
-              resizeMode={'cover'}
-              repeat={true}
-              muted={true}
-              source={images.dummy_video1}
-              style={styles.videoWrapper}
-            />
-          </Animatable.View>
-          <Animatable.View animation={'bounceInLeft'} style={{ height: '33%' }}>
-            <Video
-              resizeMode={'cover'}
-              repeat={true}
-              muted={true}
-              source={images.dummy_video4}
-              style={styles.videoWrapper}
-            />
-          </Animatable.View>
-          <Animatable.View animation={'bounceInUp'} style={{ height: '33%' }}>
-            <Video
-              resizeMode={'cover'}
-              repeat={true}
-              muted={true}
-              source={images.dummy_video6}
-              style={styles.videoWrapper}
-            />
-          </Animatable.View>
-        </View>
-        <View style={{ width: '49.5%', justifyContent: 'space-between' }}>
-          <Animatable.View animation={'bounceInDown'} style={{ height: '49.8%' }}>
-            <Video
-              resizeMode={'cover'}
-              repeat={true}
-              muted={true}
-              source={images.dummy_video2}
-              style={styles.videoWrapper}
-            />
-          </Animatable.View>
-          <Animatable.View
-            animation={'bounceInRight'}
-            style={{ height: '49.8%' }}>
-            <Video
-              resizeMode={'cover'}
-              repeat={true}
-              muted={true}
-              source={images.dummy_video5}
-              style={styles.videoWrapper}
-            />
-          </Animatable.View>
-        </View>
-      </LinearGradient>
+      <ImageBackground
+        source={require('../../assets/images/splash2-bg.png')}
+        resizeMode="cover"
+        style={styles.container}
+      />
       <Animated.View
         style={[
           styles.logoStyle,

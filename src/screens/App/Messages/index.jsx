@@ -1,5 +1,4 @@
 import moment from "moment";
-import QB from "quickblox-react-native-sdk";
 import React, { createRef, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -7,15 +6,12 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  LogBox,
-  NativeEventEmitter,
   Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import Toast from "react-native-toast-message";
 import { useDispatch, useSelector } from "react-redux";
 import { Typography } from "../../../components/Typography";
 import { AppContainer } from "../../../components/layouts/AppContainer";
@@ -24,46 +20,51 @@ import { fontsFamily } from "../../../constants/fonts";
 import { IMAGES } from "../../../constants/images";
 import Actions from "../../../redux/actions/globalActions";
 import { AppendNewMessage } from "../../../redux/globalSlice";
+import chatSocket from "../../../utils/chatSocket";
 
-LogBox.ignoreLogs(["new NativeEventEmitter()"])
-
-let Revent = null;
-let Tevent = null;
-let TSevent = null;
 let typingTimeout = null;
+let typingEmitTimeout = null;
 
 const Messages = (props) => {
   const [value, setValue] = useState("");
   const msgListRef = createRef();
 
   const [loading, setLoading] = useState(true);
-  const [dialogID, setDialogID] = useState(null);
   const [typing, setTypingStatus] = useState(false);
   const dispatch = useDispatch();
   const { messages } = useSelector(state => state.globalState);
-  const { userData } = useSelector(state => state.user);
+  const { userData, token } = useSelector(state => state.user);
   const params = props.route.params;
-  const emitter = new NativeEventEmitter(QB.chat);
+  const otherUser = params?.item?.usersData?.[0];
 
-  function receivedNewMessage(event) {
-    const { type, payload } = event;
-
-    const IsItMe = payload?.senderId == userData.quickBloxId;
-    const from = IsItMe ? userData?._id : params?.item?.usersData[0]._id;
-    const to = !IsItMe ? userData?._id : params?.item?.usersData[0]._id;
+  function receivedNewMessage(payload) {
+    if (!payload) return;
+    const payloadChatId = String(payload?.chatId ?? payload?.chat?._id ?? payload?.conversationId ?? "");
+    if (payloadChatId && payloadChatId !== String(params?.item?._id)) return;
+    const IsItMe = payload?.sender?._id == userData?._id;
+    const from = IsItMe ? userData?._id : otherUser?._id;
+    const to = !IsItMe ? userData?._id : otherUser?._id;
 
     const newMsg = {
-      _id: null,
+      _id: payload?._id ?? null,
       chatId: params?.item?._id,
       from,
       to,
-      message: payload?.body,
+      message: payload?.content ?? payload?.message ?? payload?.text ?? "",
       messageType: "TEXT",
-      createdAt: moment(payload.dateSent).toISOString(),
-      updatedAt: moment(payload.dateSent).toISOString()
+      createdAt: payload?.createdAt ?? new Date().toISOString(),
+      updatedAt: payload?.updatedAt ?? new Date().toISOString()
     }
 
     dispatch(AppendNewMessage(newMsg))
+    if (!IsItMe) {
+      dispatch(Actions.ReadMessages({
+        chatId: params?.item?._id,
+        callback: () => {
+          emitReadReceipt();
+        },
+      }));
+    }
   }
 
   // function messageStatusHandler(event) {
@@ -75,126 +76,80 @@ const Messages = (props) => {
   //   // handle system message
   // }
 
-  function userTypingHandler(event) {
-    console.warn("Typing Status", event);
-    // handle user typing / stopped typing event
-    if (event.payload.userId == params?.item?.usersData[0].quickBloxId) {
-      if (event.type = "@QB/USER_IS_TYPING")
-        setTypingStatus(true)
-      if (event.type == "@QB/USER_STOPPED_TYPING") {
-        setTypingStatus(false)
-      }
+  function userTypingHandler(payload = {}) {
+    const payloadChatId = String(payload?.chatId ?? payload?.conversationId ?? "");
+    if (payloadChatId && payloadChatId !== String(params?.item?._id)) return;
+    if (payload?.userId && payload?.userId === userData?._id) return;
+    setTypingStatus(payload?.isTyping !== false)
+    if (typingTimeout) {
+      clearTimeout(typingTimeout)
+      typingTimeout = null
+    }
+    typingTimeout = setTimeout(() => {
+      setTypingStatus(false)
+    }, 1500)
+  }
+
+  function messageReadHandler(payload = {}) {
+    const payloadChatId = String(payload?.chatId ?? payload?.conversationId ?? "");
+    if (payloadChatId && payloadChatId !== String(params?.item?._id)) return;
+    dispatch(Actions.GetChats({ callback: () => { } }));
+  }
+
+  const emitReadReceipt = () => {
+    chatSocket.markMessageRead({
+      chatId: params?.item?._id,
+      userId: userData?._id,
+    });
+  };
+
+  useEffect(() => {
+    chatSocket.connect({
+      token,
+      userId: userData?._id,
+    });
+    chatSocket.joinChat(params?.item?._id);
+    getMessages();
+    emitReadReceipt();
+
+    const offNewMessage = chatSocket.on("new-message", receivedNewMessage);
+    const offReceiveMessage = chatSocket.on("receiveMessage", receivedNewMessage);
+    const offNewMessageSnake = chatSocket.on("new_message", receivedNewMessage);
+    const offReceiveMessageSnake = chatSocket.on("receive_message", receivedNewMessage);
+    const offTypingLegacy = chatSocket.on("user-typing", userTypingHandler);
+    const offTypingSnake = chatSocket.on("user_typing", userTypingHandler);
+    const offTypingStart = chatSocket.on("typing_start", userTypingHandler);
+    const offTypingStartDash = chatSocket.on("typing-start", userTypingHandler);
+    const offMessageRead = chatSocket.on("message-read", messageReadHandler);
+    const offMessageReadSnake = chatSocket.on("message_read", messageReadHandler);
+    const offChatUpdated = chatSocket.on("chat-updated", messageReadHandler);
+
+    return () => {
+      offNewMessage?.();
+      offReceiveMessage?.();
+      offNewMessageSnake?.();
+      offReceiveMessageSnake?.();
+      offTypingLegacy?.();
+      offTypingSnake?.();
+      offTypingStart?.();
+      offTypingStartDash?.();
+      offMessageRead?.();
+      offMessageReadSnake?.();
+      offChatUpdated?.();
+      chatSocket.leaveChat(params?.item?._id);
       if (typingTimeout) {
         clearTimeout(typingTimeout)
         typingTimeout = null
       }
-
-      typingTimeout = setTimeout(() => {
-        setTypingStatus(false)
-      }, 1500)
-    }
-  }
-
-  useEffect(() => {
-
-    checkCurrentSession();
-
-    return () => {
-      if (Revent)
-        Revent.remove();
-      if (Tevent)
-        Tevent.remove();
-      if (TSevent)
-        TSevent.remove();
+      if (typingEmitTimeout) {
+        clearTimeout(typingEmitTimeout)
+        typingEmitTimeout = null
+      }
     }
 
   }, [])
 
-  const checkCurrentSession = () => {
-    dispatch(Actions.GetSingleChat({
-      chat: params?.item?._id,
-      callback: (data) => {
-        if (!data.success) {
-          Toast.show({
-            text1: "Error",
-            type: "error",
-            text2: data.message
-          })
-          return;
-        }
-        console.warn("SESSION JOINING", data.data)
-        if (data.data.isChatSession) {
-          getMessages(data.data.chatSessionId);
-          setDialogID(data.data.chatSessionId);
-
-          Revent = emitter.addListener(QB.chat.EVENT_TYPE.RECEIVED_NEW_MESSAGE, receivedNewMessage);
-
-          Tevent = emitter.addListener(QB.chat.EVENT_TYPE.USER_IS_TYPING, userTypingHandler);
-
-          TSevent = emitter.addListener(QB.chat.EVENT_TYPE.USER_STOPPED_TYPING, userTypingHandler);
-
-          // }).catch((e) => {
-          //   console.warn("ERROR joinning dialog", e)
-          // })
-        }
-        else {
-          updateCurrentSession();
-        }
-      }
-    }))
-  }
-
-  const updateCurrentSession = () => {
-    const createDialogParam = {
-      type: QB.chat.DIALOG_TYPE.CHAT,
-      occupantsIds: [
-        //"139459918",
-        userData.quickBloxId,
-        params?.item?.usersData[0].quickBloxId]
-    };
-    QB.chat
-      .createDialog(createDialogParam)
-      .then(function (dialog) {
-        dispatch(Actions.UpdateChatSession({
-          chatId: params?.item?._id,
-          isChatSession: true,
-          chatSessionId: dialog.id,
-          callback: (data) => {
-            console.warn("SESSION UPDATED", data)
-          }
-        }))
-        getMessages(dialog.id);
-        setDialogID(dialog.id);
-        console.warn("Dialog Created", dialog.id, dialog.occupantsIds)
-        // handle as neccessary, i.e.
-        // subscribe to chat events, typing events, etc.
-
-        // emitter.addListener(QB.chat.EVENT_TYPE.MESSAGE_DELIVERED, messageStatusHandler);
-        // emitter.addListener(QB.chat.EVENT_TYPE.MESSAGE_READ, messageStatusHandler);
-        // emitter.addListener(QB.chat.EVENT_TYPE.RECEIVED_SYSTEM_MESSAGE, systemMessageHandler);
-
-        Revent = emitter.addListener(QB.chat.EVENT_TYPE.RECEIVED_NEW_MESSAGE, receivedNewMessage);
-
-        Tevent = emitter.addListener(QB.chat.EVENT_TYPE.USER_IS_TYPING, userTypingHandler);
-
-        TSevent = emitter.addListener(QB.chat.EVENT_TYPE.USER_STOPPED_TYPING, userTypingHandler);
-      })
-      .catch(function (e) {
-        setLoading(false)
-        console.warn("Error while creating dialog", e)
-        // handle error
-      });
-
-  }
-
-  const getMessages = (sessionId) => {
-    try {
-      QB.chat.getDialogMessages({
-        dialogId: sessionId,
-      })
-    } catch (error) {
-
-    }
+  const getMessages = () => {
     dispatch(Actions.GetMessages({
       chat: params?.item?._id,
       callback: () => {
@@ -202,9 +157,10 @@ const Messages = (props) => {
           dispatch(Actions.ReadMessages({
             chatId: params?.item?._id,
             callback: () => {
-
+              emitReadReceipt();
             }
           }))
+        else emitReadReceipt();
         setLoading(false);
       }
     }));
@@ -214,7 +170,7 @@ const Messages = (props) => {
     if (messages?.pagination?.hasNext) {
       setLoading(true)
       dispatch(Actions.GetMoreMessages({
-        page: messages?.pagintaion?.current + 1,
+        page: messages?.pagination?.current + 1,
         chat: params.item._id,
         callback: () => {
           setLoading(false)
@@ -225,26 +181,24 @@ const Messages = (props) => {
 
   const onSend = () => {
     if (!value.length) return;
-    QB.chat.sendMessage({
-      dialogId: dialogID,
-      body: value,
-      // properties: {
-      //   _id: null,
-      //   chatId: params?.item?._id,
-      //   from: userData?._id,
-      //   message: value,
-      //   messageType: "TEXT",
-      //   to: params?.item?.usersData[0]._id,
-      //   createdAt: new Date().toISOString(),
-      //   updatedAt: new Date().toISOString()
-      // },
-    }).then((v) => {
-      console.warn("QB sent", v)
-    }).catch((e) => {
-      console.warn("Message not sent", e)
-    })
+    chatSocket.sendTypingStop({
+      chatId: params?.item?._id,
+      userId: userData?._id,
+      receiverId: otherUser?._id,
+    });
+    if (typingEmitTimeout) {
+      clearTimeout(typingEmitTimeout);
+      typingEmitTimeout = null;
+    }
+    chatSocket.sendMessage({
+      chatId: params?.item?._id,
+      content: value,
+      messageType: "text",
+      senderId: userData?._id,
+      receiverId: otherUser?._id,
+    });
     dispatch(Actions.SendMessage({
-      to: params?.item?.usersData[0]._id,
+      to: otherUser?._id,
       from: userData?._id,
       chat: params?.item?._id,
       message: value,
@@ -299,22 +253,19 @@ const Messages = (props) => {
             value={value}
             onChangeText={(text) => {
               setValue(text)
-              QB.chat.sendIsTyping({ dialogId: dialogID })
-                .then((v) => console.warn("Success sending typing event"))
-                .catch((e) => console.warn("Error sending typing event", e))
-
-              // if (typingTimeout) {
-              //   clearTimeout(typingTimeout)
-              //   typingTimeout = null
-              // }
-
-              // typingTimeout = setTimeout(() => {
-              //   QB.chat.sendStoppedTyping({ dialogId: dialogID })
-              //     .then((v) => console.warn("Success sending typing stop event"))
-              // }, 3000)
-
-
-
+              chatSocket.sendTypingStart({
+                chatId: params?.item?._id,
+                userId: userData?._id,
+                receiverId: otherUser?._id,
+              });
+              if (typingEmitTimeout) clearTimeout(typingEmitTimeout);
+              typingEmitTimeout = setTimeout(() => {
+                chatSocket.sendTypingStop({
+                  chatId: params?.item?._id,
+                  userId: userData?._id,
+                  receiverId: otherUser?._id,
+                });
+              }, 1200);
             }}
             returnKeyType="done"
             multiline={true}
