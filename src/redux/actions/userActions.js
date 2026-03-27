@@ -3,6 +3,7 @@ import Toast from "react-native-toast-message";
 import RNFetchBlob from "react-native-blob-util";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
+import { compressVideoForUpload } from "../../utils/compressMedia";
 
 const { createAsyncThunk } = require("@reduxjs/toolkit")
 const { default: axios, AxiosError, Axios } = require("axios")
@@ -131,15 +132,19 @@ const UploadVideo = createAsyncThunk(
   'auth/updateProfile',
   async (data, thunkAPI) => {
     try {
+      const compressedUri = await compressVideoForUpload(data.video.uri);
+      const uri = compressedUri || data.video.uri;
+      const baseName = (uri && String(uri).split("/").pop()) || data.video.name || "profile.mp4";
+      const filename = baseName.toLowerCase().endsWith(".mp4") ? baseName : `${baseName}.mp4`;
       let resp = await RNFetchBlob.fetch("PUT", endPoints.baseUrl + endPoints.UpdateProfile, {
         Authorization: `Bearer ${thunkAPI.getState().user.token}`,
         "Content-Type": "multipart/form-data",
       }, [
         {
           name: "profileVideo",
-          filename: data.video.name,
-          type: data.video.type,
-          data: Platform.OS == 'android' ? RNFetchBlob.wrap(decodeURIComponent(data.video.uri).replace("file://", "")) : RNFetchBlob.wrap(decodeURIComponent(data.video.uri)).replace("file://", ""),
+          filename,
+          type: data.video.type || "video/mp4",
+          data: Platform.OS == 'android' ? RNFetchBlob.wrap(decodeURIComponent(uri).replace("file://", "")) : RNFetchBlob.wrap(decodeURIComponent(uri).replace("file://", "")),
         },
       ]).uploadProgress((sent, total) => {
         data.onProgress({ sent, total })
@@ -182,12 +187,22 @@ const UploadProfileMedia = createAsyncThunk(
   'auth/UploadProfileMedia',
   async (data, thunkAPI) => {
 
-    let params = [...data?.video.map((vid) => {
+    const compressedList = await Promise.all(
+      (data?.video || []).map(async (vid) => {
+        const outUri = await compressVideoForUpload(vid.uri);
+        return { ...vid, uri: outUri || vid.uri };
+      })
+    );
+
+    let params = [...compressedList.map((vid) => {
+      const uri = vid.uri;
+      const baseName = (uri && String(uri).split("/").pop()) || vid.name || vid.fileName || "clip.mp4";
+      const filename = baseName.toLowerCase().endsWith(".mp4") ? baseName : `${baseName}.mp4`;
       return {
         name: "videos",
-        filename: vid.name ? vid.name : vid.fileName,
-        type: vid.type,
-        data: Platform.OS == 'android' ? RNFetchBlob.wrap(decodeURIComponent(vid.uri).replace("file://", "")) : RNFetchBlob.wrap(decodeURIComponent(vid.uri)).replace("file://", ""),
+        filename,
+        type: vid.type || "video/mp4",
+        data: Platform.OS == 'android' ? RNFetchBlob.wrap(decodeURIComponent(uri).replace("file://", "")) : RNFetchBlob.wrap(decodeURIComponent(uri).replace("file://", "")),
       }
     })];
     if (data?.prevMedia && data?.prevMedia?.length) {
