@@ -6,13 +6,15 @@ import {
   Keyboard,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { useImagePickerLock } from "../../../utils/imagePickerSafe";
 import * as Progress from 'react-native-progress';
 import {
   heightPercentageToDP, widthPercentageToDP
@@ -42,6 +44,12 @@ const data = [
   { Q: "How often do you make content?", options: ["1-2 days/weekly", "3-4 days/weekly", "Randomly just for fun"], selected: "1-2 days/weekly" },
 ]
 
+const minBirthDate = new Date(1900, 0, 1);
+const maxBirthDate = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d;
+})();
 
 const EditProfile = props => {
 
@@ -52,6 +60,9 @@ const EditProfile = props => {
   const [email, setEmail] = useState(userData?.email);
   const [dob, setDOB] = useState(userData?.dob ? new Date(userData?.dob) : new Date());
   const [showPicker, setShowPicker] = useState(false);
+  const [iosDraftDate, setIosDraftDate] = useState(() =>
+    userData?.dob ? new Date(userData.dob) : maxBirthDate
+  );
   const [location, setLocation] = useState(userData?.address);
   const [about, setAbout] = useState(userData?.description);
   const [social, setSocial] = useState(userData?.socialMediaProfiles);
@@ -70,6 +81,7 @@ const EditProfile = props => {
     { Q: "Are you willing to travel?", options: ["Yes", "No"], selected: userData?.willingToTravel ? "Yes" : "No" },
     { Q: "Add Follower range", options: ["range"], selected: userData?.followers + "" },
     { Q: "Add your availability?", options: ["date"], selected: new Date(userData?.availability) },
+    { Q: "Do you want to show your location?", options: ["Yes", "No"], selected: userData?.showLocation ? "Yes" : "No" },
   ]);
   const [prevMedia, setPrevMedia] = useState(userData?.videos ? userData?.videos.map(v => ({ uri: v.url })) : null);
   const [media, setMedia] = useState([]);
@@ -81,7 +93,21 @@ const EditProfile = props => {
   const [progressMedia, setProgressMedia] = useState(null);
 
   const dispatch = useDispatch();
+  const { launchImageLibrary } = useImagePickerLock();
 
+  const applyDobIfAdult = (date) => {
+    if (!date) return;
+    const years = moment().diff(moment(date), "years", true);
+    if (years >= 18) {
+      setDOB(date);
+    } else {
+      Toast.show({
+        text1: "Warning",
+        text2: "You must be 18 years of age to continue",
+        type: "error",
+      });
+    }
+  };
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -111,8 +137,8 @@ const EditProfile = props => {
           question: v.Q,
           answer: v.selected
         })),
-        willingToTravel: values[0].selected == 'Yes',
-        showLocation: values[values.length - 1].selected == 'Yes',
+        willingToTravel: values[0].selected === 'Yes',
+        showLocation: values[3].selected === 'Yes',
         followers: values[1].selected + "",
         availabilityFrom: `${Day} ${From}`,//values[2].selected.toISOString().split("T")[0],
         availabilityTo: `${Day} ${To}`,//values[2].selected.toISOString().split("T")[0],
@@ -326,35 +352,67 @@ const EditProfile = props => {
             <Input value={lname} onChangeText={(text) => { setLname(text) }} placeholder='Last Name' leftImage={require("../../../assets/images/name.png")} />
             <Input value={email} onChangeText={(text) => { setEmail(text) }} placeholder='Your Email Address' leftImage={require("../../../assets/images/email.png")} />
             {/* <Input value={} placeholder='Phone Number' leftImage={require("../../assets/images/phone.png")} /> */}
-            <Input value={dob.toDateString()} onPressOut={() => {
-              Keyboard.dismiss()
-              setShowPicker(true)
-            }} placeholder='Date Of Birth' leftImage={require("../../../assets/images/DOB.png")} />
-            {
-              showPicker &&
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                Keyboard.dismiss();
+                setIosDraftDate(dob);
+                setShowPicker(true);
+              }}>
+              <View pointerEvents="none">
+                <Input
+                  value={moment(dob).format("DD-MMM-YYYY")}
+                  editable={false}
+                  placeholder="Date Of Birth"
+                  leftImage={require("../../../assets/images/DOB.png")}
+                />
+              </View>
+            </TouchableOpacity>
+            {Platform.OS === "android" && showPicker ? (
               <RNDatePicker
-                value={dob ? dob : new Date()}
+                value={dob}
+                mode="date"
+                display="default"
+                minimumDate={minBirthDate}
+                maximumDate={maxBirthDate}
                 onChange={(event, date) => {
-                  if (Platform.OS == "android")
-                    setShowPicker(false)
-
-                  let diff = moment(moment.now()).diff(date.getTime());
-                  let years = Math.abs(diff) / 31556952000;
-                  if (years >= 18)
-                    setDOB(date);
-                  else {
-                    Toast.show({
-                      text1: "Warning",
-                      text2: "You must be 18 years of age to continue",
-                      type: "error"
-                    })
-                  }
-                }}
-                onError={() => {
-                  setShowPicker(false)
+                  setShowPicker(false);
+                  if (event.type === "dismissed" || !date) return;
+                  applyDobIfAdult(date);
                 }}
               />
-            }
+            ) : null}
+            {Platform.OS === "ios" ? (
+              <Modal transparent animationType="slide" visible={showPicker} onRequestClose={() => setShowPicker(false)}>
+                <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setShowPicker(false)}>
+                  <Pressable style={{ backgroundColor: "#fff", borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 28 }} onPress={(e) => e.stopPropagation()}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#eee" }}>
+                      <TouchableOpacity onPress={() => setShowPicker(false)}>
+                        <Text style={{ fontSize: 17, color: "#007AFF" }}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          applyDobIfAdult(iosDraftDate);
+                          setShowPicker(false);
+                        }}>
+                        <Text style={{ fontSize: 17, fontWeight: "600", color: "#007AFF" }}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <RNDatePicker
+                      value={iosDraftDate}
+                      mode="date"
+                      display="spinner"
+                      themeVariant="light"
+                      minimumDate={minBirthDate}
+                      maximumDate={maxBirthDate}
+                      onChange={(_, date) => {
+                        if (date) setIosDraftDate(date);
+                      }}
+                    />
+                  </Pressable>
+                </Pressable>
+              </Modal>
+            ) : null}
             <Input
               value={location}
               onChangeText={(text) => { setLocation(text) }}

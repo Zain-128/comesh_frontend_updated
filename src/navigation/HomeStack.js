@@ -19,6 +19,7 @@ import Notifications from '../screens/App/Notifications';
 import PaymentMethod from '../screens/App/PaymentMethod';
 import Policies from '../screens/App/Policies';
 import Profile from '../screens/App/Profile';
+import SearchUsers from '../screens/App/SearchUsers';
 import Settings from "../screens/App/Settings";
 import Subscription from '../screens/App/Subscription';
 import BottomTabs from './BottomTabs';
@@ -31,6 +32,7 @@ const HomeStack = () => {
     <Stack.Navigator
       screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs" component={BottomTabNavigation} />
+      <Stack.Screen name="SearchUsers" component={SearchUsers} />
       <Stack.Screen name="UserProfile" component={Profile} />
       <Stack.Screen name="EditProfile" component={EditProfile} />
       <Stack.Screen name="Messages" component={Messages} />
@@ -50,11 +52,11 @@ const HomeStack = () => {
 
 export default HomeStack;
 
-const BottomTabNavigation = (props) => {
+const BottomTabNavigation = () => {
   return (
     <Tab.Navigator
       initialRouteName="Home"
-      tabBar={(e) => <BottomTabs {...e} {...props} />}
+      tabBar={(tabBarProps) => <BottomTabs {...tabBarProps} />}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,

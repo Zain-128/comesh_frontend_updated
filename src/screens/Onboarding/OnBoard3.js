@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { useImagePickerLock } from '../../utils/imagePickerSafe';
 import * as Progress from 'react-native-progress';
 import { heightPercentageToDP, widthPercentageToDP } from 'react-native-responsive-screen';
 import Toast from 'react-native-toast-message';
+import Video from 'react-native-video';
 import { useDispatch } from "react-redux";
 import PrimaryButton from '../../components/Buttons/PrimaryButton';
 import Container from '../../components/Container';
@@ -20,10 +21,13 @@ const OnBoard3 = (props) => {
   const [videos, setVideos] = useState([]);
   const [disabled, setDisabled] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0); 123
+  const [progress, setProgress] = useState(0);
+  const [previewUri, setPreviewUri] = useState(null);
+  const { launchImageLibrary } = useImagePickerLock();
 
   const SelectVideos = () => {
-    if (videos.length == 5) {
+    const remaining = 5 - videos.length;
+    if (remaining <= 0) {
       Toast.show({
         text1: "Warning",
         text2: "You can only add 5 videos",
@@ -31,41 +35,24 @@ const OnBoard3 = (props) => {
       })
       return;
     }
-    setDisabled(true)
-    // Alert.alert("Select", "Please select an option", [
-    //   {
-    //     text: "Camera",
-    //     onPress: () => {
-    //       launchCamera({
-    //         mediaType: "video",
-    //         quality: 0.7,
-    //         videoQuality: "medium",
-    //         selectionLimit: 1
-    //       }, (response) => {
-    //         if (!response.didCancel && !response.errorMessage) {
-    //           setVideos([...videos, ...response.assets]);
-    //         }
-    //       })
-    //     }
-    //   }, {
-    //     text: "Library",
-    //     onPress: () => {
+    setDisabled(true);
     launchImageLibrary({
       mediaType: "video",
       quality: 0.7,
       videoQuality: "medium",
-      selectionLimit: 1
+      selectionLimit: remaining,
     }, (response) => {
-      if (!response.didCancel && !response.errorMessage) {
-        setVideos([...videos, ...response.assets]);
-        setDisabled(false)
-      }
-    })
-    //     }
-    //   }
-    // ])
+      setDisabled(false);
+      if (response.didCancel || response.errorMessage) return;
+      const assets = response.assets || [];
+      if (!assets.length) return;
+      setVideos((prev) => [...prev, ...assets].slice(0, 5));
+    });
+  };
 
-  }
+  const removeVideoAt = (index) => {
+    setVideos((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const Upload = async () => {
     if (videos.length > 0) {
@@ -104,8 +91,8 @@ const OnBoard3 = (props) => {
         }, 1000)
       },
       callback: (data) => {
-        let res = JSON.parse(data);
-        console.warn(res?.data?.videos)
+        const res = typeof data === "object" && data !== null ? data : {};
+        console.warn(res?.data?.videos);
         if (res.success) {
           setUploading(false)
           setProgress(null)
@@ -188,10 +175,31 @@ const OnBoard3 = (props) => {
             </Text>
             <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 10 }}>
               {
-                videos.map((v) =>
-                  <View style={{ overflow: 'hidden', width: widthPercentageToDP(28), height: heightPercentageToDP(20), borderRadius: 10, backgroundColor: "#F9F9FC", alignItems: 'center', justifyContent: "center" }}>
-                    <Image style={{ ...StyleSheet.absoluteFillObject, width: "auto", height: "auto" }} resizeMode='cover' source={{ uri: v?.uri }} />
-                    <TouchableOpacity>
+                videos.map((v, idx) =>
+                  <View
+                    key={v?.uri ? `${v.uri}-${idx}` : `vid-${idx}`}
+                    style={{ overflow: 'hidden', width: widthPercentageToDP(28), height: heightPercentageToDP(20), borderRadius: 10, backgroundColor: "#000", alignItems: 'center', justifyContent: "center" }}>
+                    {v?.uri ? (
+                      <Video
+                        source={{ uri: v.uri }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                        muted
+                        repeat={false}
+                        paused
+                        disableFocus
+                      />
+                    ) : null}
+                    <TouchableOpacity
+                      style={{ position: "absolute", top: 4, right: 4, zIndex: 2, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 4 }}
+                      onPress={() => removeVideoAt(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>✕</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setPreviewUri(v.uri)}
+                      style={{ zIndex: 1 }}
+                      activeOpacity={0.85}>
                       <Image style={{ width: 35, height: 35 }} source={require("../../assets/images/play.png")} />
                     </TouchableOpacity>
                   </View>)
@@ -238,6 +246,24 @@ const OnBoard3 = (props) => {
             />
             <Progress.Bar progress={progress} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
           </View>
+        </View>
+      </Modal>
+      <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <View style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}>
+          {previewUri ? (
+            <Video
+              source={{ uri: previewUri }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="contain"
+              controls
+              repeat={false}
+            />
+          ) : null}
+          <TouchableOpacity
+            onPress={() => setPreviewUri(null)}
+            style={{ position: "absolute", top: 48, right: 16, backgroundColor: "rgba(255,255,255,0.95)", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 }}>
+            <Text style={{ fontWeight: "700", color: "#000" }}>Close</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </Container >

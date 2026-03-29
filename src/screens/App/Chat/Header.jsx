@@ -1,5 +1,6 @@
 import React from 'react';
 import {StyleSheet, View, Image, TouchableOpacity} from 'react-native';
+import Icon from 'react-native-vector-icons/AntDesign';
 import {IMAGES} from '../../../constants/images';
 import { Typography } from '../../../components/Typography';
 
@@ -13,7 +14,16 @@ const Header = (props) => {
         justifyContent: 'space-between',
       }}>
       <Typography children={'Messages'} textType="bold" size={24} />
-      <View style={{flexDirection: 'row', gap: 5}}>
+      <View style={{flexDirection: 'row', gap: 14, alignItems: 'center'}}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            const nav = props.navigation.getParent?.() ?? props.navigation;
+            nav.navigate('SearchUsers');
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Icon name="pluscircleo" size={24} color="#042AFF" />
+        </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={1}
           style={{}}

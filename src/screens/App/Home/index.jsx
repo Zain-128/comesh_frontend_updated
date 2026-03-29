@@ -91,6 +91,8 @@ const Home = props => {
             userId,
             type: "like"
           }))
+          dispatch(globalActions.GetChats({ callback: () => { } }));
+          dispatch(globalActions.getLikesUsers({ callback: () => { } }));
         }
       }
     }));
@@ -210,7 +212,7 @@ const Home = props => {
                 outputCardOpacityRangeY={[0, 1, 1, 1, 1]}
                 animateOverlayLabelsOpacity
                 renderCard={(card, cardIndex) => {
-                  const video = helper.resolveMediaUrl(card?.profileVideo);
+                  const videoSrc = helper.getMediaSource(card?.profileVideo);
                   const poster = helper.resolveMediaUrl(card?.profileVideoThumbnail || card?.profileImage);
                   //images.dummy_video5
                   return (
@@ -222,7 +224,7 @@ const Home = props => {
                         paused={cardIndex == currentIndex ? false : true}
                         repeat={true}
                         muted={true}
-                        source={video ? { uri: video } : images.dummy_video5}
+                        source={videoSrc || images.dummy_video5}
                         poster={poster || undefined}
                         posterResizeMode="cover"
                         resizeMode={'cover'}

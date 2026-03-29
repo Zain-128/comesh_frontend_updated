@@ -19,9 +19,25 @@ const sentenceCase = (text) => {
 
 const resolveMediaUrl = (input) => {
   if (!input) return "";
-  const value = String(input).trim();
+  let value = String(input).trim();
   if (!value.length) return "";
-  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    try {
+      const u = new URL(value);
+      const parts = u.pathname.split("/").filter(Boolean);
+      /** Backend used to save `https://host/file.jpg` but files live under `/uploads/`. */
+      if (
+        parts.length === 1 &&
+        /\.(jpe?g|png|gif|webp|bmp|mp4|mov|m4v|webm)$/i.test(parts[0])
+      ) {
+        u.pathname = `/uploads/${parts[0]}`;
+        value = u.toString();
+      }
+    } catch {
+      /* ignore */
+    }
+    return value;
+  }
 
   const apiBase = String(endPoints.baseUrl || "");
   const origin = apiBase.replace(/\/comesh\/api\/?$/, "").replace(/\/api\/?$/, "");
@@ -31,8 +47,26 @@ const resolveMediaUrl = (input) => {
   return `${origin}/${value}`;
 };
 
+/** RN `Image` / `Video` do not use axios; ngrok free serves ERR_NGROK_6024 HTML without this header. */
+const getMediaSource = (input) => {
+  const uri = resolveMediaUrl(input);
+  if (!uri) return null;
+  if (String(uri).includes("ngrok")) {
+    return {
+      uri,
+      headers: { "ngrok-skip-browser-warning": "true" },
+    };
+  }
+  return { uri };
+};
+
+/** Use for any `{ uri: helper.resolveMediaUrl(...) }` — forwards ngrok header when needed. */
+const getMediaSourceOrUri = (input) => getMediaSource(input) || undefined;
+
 export default {
   FollowersPrefix,
   sentenceCase,
   resolveMediaUrl,
+  getMediaSource,
+  getMediaSourceOrUri,
 };

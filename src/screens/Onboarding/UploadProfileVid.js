@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { useImagePickerLock } from '../../utils/imagePickerSafe';
 import * as Progress from 'react-native-progress';
 import { widthPercentageToDP } from 'react-native-responsive-screen';
 import Toast from "react-native-toast-message";
@@ -13,12 +13,30 @@ import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
 import userActions from '../../redux/actions/userActions';
 
+/** Handles object (from thunk) or legacy string body; never throws on HTML/error pages. */
+function normalizeUploadResponse(data) {
+  if (data && typeof data === "object") return data;
+  if (typeof data === "string") {
+    const t = data.trim();
+    if (!t || t.startsWith("<")) {
+      return { success: false, message: "Upload failed. Please try again." };
+    }
+    try {
+      return JSON.parse(t);
+    } catch {
+      return { success: false, message: "Upload failed. Please try again." };
+    }
+  }
+  return { success: false, message: "Upload failed. Please try again." };
+}
+
 const UploadProfileVid = (props) => {
 
   const [media, setMedia] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(null);
   const dispatch = useDispatch();
+  const { launchImageLibrary } = useImagePickerLock();
 
   const SelectVideo = () => {
     // Alert.alert("Select", "Please select an option", [
@@ -90,20 +108,18 @@ const UploadProfileVid = (props) => {
         }, 1000)
       },
       callback: (data) => {
-        let res = JSON.parse(data);
-        console.warn(data)
+        const res = normalizeUploadResponse(data);
         if (res.success) {
-          setProgress(null)
-          props.navigation.navigate('OnBoard2')
-        }
-        else {
+          setProgress(null);
+          props.navigation.navigate("OnBoard2");
+        } else {
           Toast.show({
             type: "error",
             text1: "Error",
-            text2: res.message
-          })
+            text2: res.message || "Upload failed. Please try again.",
+          });
         }
-      }
+      },
     }))
     setUploading(false)
   }
@@ -159,7 +175,7 @@ const UploadProfileVid = (props) => {
               color='#000'
               size={30}
             />
-            <Progress.Bar progress={progress} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
+            <Progress.Bar progress={progress ?? 0} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
           </View>
         </View>
       </Modal>

@@ -23,6 +23,26 @@ import chatSocket from "../../../utils/chatSocket";
 import helper from "../../../utils/helper";
 import Header from "./Header";
 
+/** Shape expected by `Messages` — use when navigating: `navigation.navigate('Messages', { item: DUMMY_MESSAGES_CHAT_ITEM })` */
+export const DUMMY_MESSAGES_CHAT_ITEM = {
+  _id: "000000000000000000000001",
+  latestMessage: "Hey! This is a preview chat.",
+  createdAt: new Date().toISOString(),
+  usersData: [
+    { _id: "000000000000000000000002", firstName: "Demo", lastName: "User" },
+  ],
+  unReadMessage: { unReadMessageCount: 0, userId: null },
+};
+
+function unreadCountForUser(chat, userId) {
+  if (!chat?.unReadMessage || userId == null) return 0;
+  const rows = Array.isArray(chat.unReadMessage)
+    ? chat.unReadMessage
+    : [chat.unReadMessage];
+  const row = rows.find((u) => String(u?.userId) === String(userId));
+  return Math.max(0, Number(row?.unReadMessageCount) || 0);
+}
+
 const Chat = (props) => {
 
 
@@ -80,7 +100,7 @@ const Chat = (props) => {
     return () => {
       offChatUpdated?.();
     };
-  }, [])
+  }, [token, userData?._id])
 
 
   const _onEndReached = () => {
@@ -135,11 +155,11 @@ const Chat = (props) => {
                   <ImageBackground style={{ flex: 1, overflow: "hidden", alignItems: 'center', justifyContent: "center" }} resizeMode="stretch" source={require("../../../assets/images/likeBorder.png")}>
                     <View style={{ borderRadius: 15, overflow: 'hidden', width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}>
                       <Image
-                        source={{
-                          uri: helper.resolveMediaUrl(
+                        source={
+                          helper.getMediaSource(
                             item?.profileVideoThumbnail || item?.profileImage || item?.profileVideo
-                          ),
-                        }}
+                          ) || IMAGES.men
+                        }
                         resizeMode="cover"
                         style={{ width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}
                       />
@@ -199,6 +219,11 @@ const Chat = (props) => {
 };
 
 const ListItem = ({ item, index, navigation, userData }) => {
+  const unread = unreadCountForUser(item, userData?._id);
+  const listTime =
+    item?.latestMessageTime ||
+    item?.updatedAt ||
+    item?.createdAt;
   return (
     <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item })}>
       <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/6596/6596121.png" }} style={styles.itemImage} />
@@ -210,25 +235,24 @@ const ListItem = ({ item, index, navigation, userData }) => {
             size={12}
             textType={"light"}
             color={"#999B9F"}
+            numberOfLines={2}
           />
         </View>
         <View style={{ alignItems: "center" }}>
           <Typography
-            //numberOfLines={2}
-            children={moment(item.createdAt).fromNow()}
+            children={listTime ? moment(listTime).fromNow() : ""}
             color={"#999B9F"}
             textType={"light"}
             size={10}
           />
-          {
-            item?.unReadMessage?.unReadMessageCount > 0 && item?.unReadMessage?.userId == userData._id &&
-            < View style={styles.unreadCount}>
-              <Typography children={item?.unReadMessage?.unReadMessageCount} color={"#fff"} size={12} />
+          {unread > 0 ? (
+            <View style={styles.unreadCount}>
+              <Typography children={String(unread > 99 ? "99+" : unread)} color={"#fff"} size={12} />
             </View>
-          }
+          ) : null}
         </View>
       </View>
-    </TouchableOpacity >
+    </TouchableOpacity>
   );
 };
 

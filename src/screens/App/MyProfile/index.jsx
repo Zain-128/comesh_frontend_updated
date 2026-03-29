@@ -1,5 +1,5 @@
-import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -15,7 +15,8 @@ import {
 } from 'react-native-responsive-screen';
 import Toast from "react-native-toast-message";
 import Video from "react-native-video";
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import userActions from '../../../redux/actions/userActions';
 import Input from '../../../components/Input';
 import { SelectPicker } from '../../../components/SelectPicket';
 import { Typography } from '../../../components/Typography';
@@ -28,10 +29,29 @@ const MyProfile = props => {
     StatusBar.setBarStyle('light-content');
   }, []);
 
-  const { userData } = useSelector(state => state.user)
+  const dispatch = useDispatch();
+  const { userData } = useSelector(state => state.user);
+
+  console.log(":::::::::::::::::::", userData);
+  useFocusEffect(
+    useCallback(() => {
+      const id = userData?._id;
+      if (!id) return;
+
+      console.log(":::::::::::::::::::91", id);
+      dispatch(userActions.GetMyProfile(id));
+    }, [dispatch, userData?._id])
+  );
+
   const [paused, setPaused] = useState(false)
   const [profileVideoFailed, setProfileVideoFailed] = useState(false);
   const navigation = useNavigation();
+
+  const displayName =
+    [userData?.firstName, userData?.lastName].filter(Boolean).join(" ").trim() ||
+    userData?.fullName ||
+    userData?.email ||
+    "";
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
@@ -45,11 +65,12 @@ const MyProfile = props => {
       unsubscribe();
       unsubscribed();
     }
-  }, []);
+  }, [navigation]);
 
   const getAvailability = () => {
-    let fTimeArr = userData?.availabilityFrom.split(" ");
-    let tTimeArr = userData?.availabilityTo.split(" ");
+    if (!userData?.availabilityFrom || !userData?.availabilityTo) return "";
+    let fTimeArr = userData.availabilityFrom.split(" ");
+    let tTimeArr = userData.availabilityTo.split(" ");
     let tDayArr = userData?.availabilityTo.split(",");
     let tDayArrSpace = String(tDayArr[tDayArr.length - 1]).split(" ");
     let fromTime = fTimeArr[1] + " " + fTimeArr[2];
@@ -110,7 +131,10 @@ const MyProfile = props => {
             <Video
               paused={paused}
               repeat={true}
-              source={{ uri: helper.resolveMediaUrl(userData?.profileVideo) }}
+              muted
+              playInBackground={false}
+              playWhenInactive={false}
+              source={helper.getMediaSource(userData?.profileVideo) || { uri: helper.resolveMediaUrl(userData?.profileVideo) }}
               poster={helper.resolveMediaUrl(userData?.profileVideoThumbnail || userData?.profileImage) || undefined}
               posterResizeMode="cover"
               onError={() => setProfileVideoFailed(true)}
@@ -120,9 +144,8 @@ const MyProfile = props => {
           ) : (
             <Image
               source={
-                helper.resolveMediaUrl(userData?.profileImage || userData?.profileVideoThumbnail)
-                  ? { uri: helper.resolveMediaUrl(userData?.profileImage || userData?.profileVideoThumbnail) }
-                  : IMAGES.men
+                helper.getMediaSourceOrUri(userData?.profileImage || userData?.profileVideoThumbnail) ??
+                IMAGES.men
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -133,7 +156,7 @@ const MyProfile = props => {
 
         <View style={styles.profileContent}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Typography children={userData?.firstName + " " + userData?.lastName} size={26} textType="bold" />
+            <Typography children={displayName} size={26} textType="bold" />
             {
               userData?.isVerified &&
               <Image
@@ -154,7 +177,7 @@ const MyProfile = props => {
               gap: 10,
               marginTop: 8,
             }}>
-            {userData?.niche.map((i, index) => (
+            {(Array.isArray(userData?.niche) ? userData.niche : []).map((i, index) => (
               <View style={styles.profileBadge}>
                 <Typography children={helper.sentenceCase(i)} color="#fff" size={12} />
               </View>
@@ -262,9 +285,10 @@ const MyProfile = props => {
               }}>
               {userData?.videos && userData?.videos.map(i => (
                 <Video
-                  source={{ uri: helper.resolveMediaUrl(i.url) }}
+                  source={helper.getMediaSource(i.url) || { uri: helper.resolveMediaUrl(i.url) }}
                   poster={helper.resolveMediaUrl(i.thumbnailUrl || userData?.profileVideoThumbnail) || undefined}
                   posterResizeMode="cover"
+                  muted
                   paused
                   controls
                   style={{

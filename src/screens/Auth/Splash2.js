@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, ImageBackground, PermissionsAndroid, Platform, StyleSheet } from 'react-native';
+import { Animated, Image, ImageBackground, PermissionsAndroid, Platform, StyleSheet, Text, View } from 'react-native';
 import {
   widthPercentageToDP
 } from 'react-native-responsive-screen';
@@ -103,13 +103,13 @@ const Splash2 = () => {
   return (
     <>
       <ImageBackground
-        source={require('../../assets/images/splash2-bg.png')}
+        source={require('../../assets/images/splash2-bgg.png')}
         resizeMode="cover"
         style={styles.container}
       />
       <Animated.View
         style={[
-          styles.logoStyle,
+          styles.logoBlock,
           {
             transform: [
               {
@@ -121,7 +121,12 @@ const Splash2 = () => {
             ],
           },
         ]}>
-        <Image source={images.Logo} style={styles.videoWrapper} />
+        <View style={styles.logoInner}>
+          <Image source={images.Logo} style={styles.videoWrapper} />
+        </View>
+        <View style={styles.taglineWrap}>
+          <Text style={styles.tagline}>Swipe Match · Create together</Text>
+        </View>
       </Animated.View>
     </>
   );
@@ -139,13 +144,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  logoStyle: {
+  logoBlock: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '36%',
+    alignItems: 'center',
+  },
+  logoInner: {
     width: widthPercentageToDP(30),
     height: widthPercentageToDP(30),
     borderRadius: widthPercentageToDP(2),
     overflow: 'hidden',
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '40%',
+  },
+  taglineWrap: {
+    marginTop: widthPercentageToDP(3),
+    alignItems: 'center',
+  },
+  tagline: {
+    color: colors.white,
+    textAlign: 'center',
+    fontSize: widthPercentageToDP(3.6),
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
 });

@@ -79,13 +79,14 @@ android {
 
     namespace "com.updated"
     defaultConfig {
-        applicationId "com.updated"
+        // Must match package_name in android/app/google-services.json (Firebase)
+        applicationId "com.comesh"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         manifestPlaceholders = [
-            appAuthRedirectScheme: "com.updated",
+            appAuthRedirectScheme: "com.comesh",
             usesCleartextTraffic: "true"
         ]
     }
@@ -121,3 +122,8 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+apply plugin: "com.google.gms.google-services"
+
+// Bundle react-native-vector-icons font files (required for icons on Android)
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")

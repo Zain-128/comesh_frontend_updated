@@ -1,18 +1,18 @@
+import { createAsyncThunk } from "@reduxjs/toolkit";
 import Toast from "react-native-toast-message";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
 
-const { createAsyncThunk } = require("@reduxjs/toolkit")
-const { default: axios, AxiosError, Axios } = require("axios")
-
 const DashboardListing = createAsyncThunk(
-  'general/Dashboard',
+  "general/Dashboard",
   async (data, thunkAPI) => {
     try {
-      console.warn(data.params)
-      let result = await apiRequest.post(endPoints.Dashboard + `?page=${data?.page}`, {
-        ...data.params
-      });
+      let result = await apiRequest.post(
+        endPoints.Dashboard + `?page=${data?.page}`,
+        {
+          ...data.params,
+        }
+      );
       data.callback(result.data);
       return result.data;
     } catch (error) {
@@ -21,108 +21,98 @@ const DashboardListing = createAsyncThunk(
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
+
 const GetOthersProfile = createAsyncThunk(
-  'general/GetOthersProfile',
+  "general/GetOthersProfile",
   async (data, thunkAPI) => {
     try {
+      if (!data?.userId) {
+        return thunkAPI.rejectWithValue({ message: "Missing user id" });
+      }
       let result = await apiRequest.get(endPoints.OthersProfile + data.userId);
-      data.callback(result.data);
+      data.callback?.(result.data);
       return result.data;
     } catch (error) {
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
-    }
-  },
-)
-
-const blockUser = createAsyncThunk(
-  'general/blockUser',
-  async (data, thunkAPI) => {
-    try {
-      let result = await apiRequest.post(endPoints.Block, {
-        userToBlock: data.userId,
-        reason: data?.reason
+      const eRes = error?.response?.data;
+      const msg = eRes?.message || error?.message || "Failed to load profile";
+      return thunkAPI.rejectWithValue({
+        message: msg,
+        error: eRes?.error,
       });
-      data.callback(result.data);
-      return { userId: data.userId, ...result.data };
-    } catch (error) {
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
     }
-  },
-)
+  }
+);
 
-const reportUser = createAsyncThunk(
-  'general/reportUser',
-  async (data, thunkAPI) => {
-    try {
-      let result = await apiRequest.post(endPoints.Report, {
-        reportOf: data?.userId,
-        reason: data?.reason
+const blockUser = createAsyncThunk("general/blockUser", async (data, thunkAPI) => {
+  try {
+    let result = await apiRequest.post(endPoints.Block, {
+      userToBlock: data.userId,
+      reason: data?.reason,
+    });
+    data.callback(result.data);
+    return { userId: data.userId, ...result.data };
+  } catch (error) {
+    let eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
       });
-      data.callback(result.data);
-      return { userId: data.userId, ...result.data };
-    } catch (error) {
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
     }
-  },
-)
+  }
+});
+
+const reportUser = createAsyncThunk("general/reportUser", async (data, thunkAPI) => {
+  try {
+    let result = await apiRequest.post(endPoints.Report, {
+      reportOf: data?.userId,
+      reason: data?.reason,
+    });
+    data.callback(result.data);
+    return { userId: data.userId, ...result.data };
+  } catch (error) {
+    let eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
+      });
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
+    }
+  }
+});
 
 const SuperLikeUser = createAsyncThunk(
-  'general/SuperLikeUser',
+  "general/SuperLikeUser",
   async (data, thunkAPI) => {
     try {
       let result = await apiRequest.post(endPoints.superLike, {
-        userSuperLikedByMe: data.userId
+        userSuperLikedByMe: data.userId,
       });
       data.callback(result.data);
       return { userId: data.userId, ...result.data };
@@ -132,421 +122,515 @@ const SuperLikeUser = createAsyncThunk(
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
-    }
-  },
-)
-const likeUser = createAsyncThunk(
-  'general/likeUser',
-  async (data, thunkAPI) => {
-    try {
-      let result = await apiRequest.post(endPoints.Like, {
-        userLikedByMe: data.userId
-      });
-      data.callback(result.data);
-      return { userId: data.userId, ...result.data };
-    } catch (error) {
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
+          text2: error.message,
+        });
       }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
     }
-  },
-)
+  }
+);
 
-const unLikeUser = createAsyncThunk(
-  'general/unLikeUser',
-  async (data, thunkAPI) => {
-    try {
-      let result = await apiRequest.post(endPoints.Unlike, {
-        userUnLikedByMe: data.userId
+const likeUser = createAsyncThunk("general/likeUser", async (data, thunkAPI) => {
+  try {
+    let result = await apiRequest.post(endPoints.Like, {
+      userLikedByMe: data.userId,
+    });
+    data.callback(result.data);
+    return { userId: data.userId, ...result.data };
+  } catch (error) {
+    let eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
       });
-      data.callback(result.data);
-      return { userId: data.userId, ...result.data };
-    } catch (error) {
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
     }
-  },
-)
+  }
+});
+
+const unLikeUser = createAsyncThunk("general/unLikeUser", async (data, thunkAPI) => {
+  try {
+    let result = await apiRequest.post(endPoints.Unlike, {
+      userUnLikedByMe: data.userId,
+    });
+    data.callback(result.data);
+    return { userId: data.userId, ...result.data };
+  } catch (error) {
+    let eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
+      });
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
+    }
+  }
+});
 
 const getStaticContent = createAsyncThunk(
-  'general/getStaticContent',
+  "general/getStaticContent",
   async (data, thunkAPI) => {
     try {
-      let result = await apiRequest.get(endPoints.StaticContent(data.type));
+      const type = typeof data === "string" ? data : data?.type;
+      let result = await apiRequest.get(endPoints.StaticContent(type));
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const DeactivateAccount = createAsyncThunk(
-  'general/DeactivateAccount',
+  "general/DeactivateAccount",
   async (data, thunkAPI) => {
     try {
       let result = await apiRequest.post(endPoints.DeactiveAccount, data.params);
       Toast.show({
         text1: result.data.success ? "Success" : "Error",
-        text2: result.data.success ? "User Deactivated successfully" : result.data.message,
-        type: result.data.success ? "success" : "error"
-      })
-      data.callback()
+        text2: result.data.success
+          ? "User Deactivated successfully"
+          : result.data.message,
+        type: result.data.success ? "success" : "error",
+      });
+      data.callback();
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
-const GetChats = createAsyncThunk(
-  'general/GetChats',
-  async (data, thunkAPI) => {
-    try {
-      let result = await apiRequest.get(endPoints.GetChats + "?page=1&order=desc&sort=updatedAt");
-      data.callback()
-      return result.data;
-    } catch (error) {
-      console.warn(error.message)
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message
-        })
+const GetChats = createAsyncThunk("general/GetChats", async (data, thunkAPI) => {
+  try {
+    let result = await apiRequest.get(
+      endPoints.GetChats + "?page=1&order=desc&sort=updatedAt"
+    );
+    data.callback();
+    return result.data;
+  } catch (error) {
+    console.warn(error.message);
+    let eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
+      });
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
     }
-  },
-)
+  }
+});
+
 const GetMoreChats = createAsyncThunk(
-  'general/GetMoreChats',
+  "general/GetMoreChats",
   async (data, thunkAPI) => {
     try {
-      console.warn(endPoints.GetChats + "?page=" + data.page)
-      let result = await apiRequest.get(endPoints.GetChats + "?page=" + data.page);
-      data.callback()
+      let result = await apiRequest.get(
+        endPoints.GetChats + "?page=" + data.page
+      );
+      data.callback();
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const GetMessages = createAsyncThunk(
-  'general/GetMessages',
+  "general/GetMessages",
   async (data, thunkAPI) => {
     try {
-      let result = await apiRequest.get(endPoints.GetMessages + `?chat=${data.chat}&page=1&sort=createdAt&order=desc`);
-      data.callback()
+      let result = await apiRequest.get(
+        endPoints.GetMessages +
+          `?chat=${data.chat}&page=1&sort=createdAt&order=desc`
+      );
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
+    } finally {
+      data.callback?.();
     }
-  },
-)
+  }
+);
+
 const GetMoreMessages = createAsyncThunk(
-  'general/GetMoreMessages',
+  "general/GetMoreMessages",
   async (data, thunkAPI) => {
     try {
-      let result = await apiRequest.get(endPoints.GetMessages + `?chat=${data.chat}&page=${data.page}&sort=createdAt&order=desc`);
-      data.callback()
+      let result = await apiRequest.get(
+        endPoints.GetMessages +
+          `?chat=${data.chat}&page=${data.page}&sort=createdAt&order=desc`
+      );
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
+    } finally {
+      data.callback?.();
     }
-  },
-)
+  }
+);
+
 const SendMessage = createAsyncThunk(
-  'general/SendMessage',
+  "general/SendMessage",
   async (data, thunkAPI) => {
     try {
-      let formData = new FormData();
-      formData.append("to", data.to)
-      formData.append("from", data.from)
-      formData.append("message", data.message)
-      formData.append("mediaFile", data.media)
-      formData.append("messageType", "BOTH")
-      formData.append("chatId", data.chat)
-      let result = await apiRequest.post(endPoints.GetMessages, formData);
-      data.callback()
-      return result.data;
+      const msgType = data.messageType || (data.media?.uri ? "BOTH" : "TEXT");
+      const hasMedia = Boolean(data.media?.uri);
+      const token = thunkAPI.getState()?.user?.token;
+      const base = String(endPoints.baseUrl || "")
+        .trim()
+        .replace(/\/$/, "");
+      const messagesPath = String(endPoints.GetMessages || "/messages").trim();
+      const messagesUrl = messagesPath.startsWith("/")
+        ? `${base}${messagesPath}`
+        : `${base}/${messagesPath}`;
+
+      /** Text-only: JSON POST — avoids Android Network Error with axios+multipart. */
+      if (!hasMedia) {
+        const textBody = {
+          to: data.to,
+          from: data.from,
+          message: data.message ?? " ",
+          chatId: data.chat,
+          messageType: msgType,
+          ...(data.replyToMessageId
+            ? { replyToMessageId: String(data.replyToMessageId) }
+            : {}),
+        };
+        let result = await apiRequest.post(
+          endPoints.SendMessageText,
+          textBody,
+          { timeout: 30000 }
+        );
+        data.callback?.();
+        thunkAPI.dispatch(GetChats({ callback: () => {} }));
+        return result.data;
+      }
+
+      const formData = new FormData();
+      formData.append("to", data.to);
+      formData.append("from", data.from);
+      formData.append("message", data.message ?? " ");
+      formData.append("chatId", data.chat);
+      formData.append("messageType", msgType);
+      if (data.replyToMessageId) {
+        formData.append("replyToMessageId", String(data.replyToMessageId));
+      }
+      const uri = data.media.uri;
+      const mime = data.media.type || "image/jpeg";
+      let baseName =
+        data.media.fileName ||
+        data.media.name ||
+        (typeof uri === "string" && uri.includes("/")
+          ? decodeURIComponent(uri.split("/").pop() || "").split("?")[0]
+          : "") ||
+        (mime.startsWith("video") ? "upload.mp4" : "upload.jpg");
+      if (!/\.[a-z0-9]{2,4}$/i.test(baseName)) {
+        baseName += mime.startsWith("video") ? ".mp4" : ".jpg";
+      }
+      formData.append("mediaFile", {
+        uri,
+        type: mime,
+        name: baseName,
+      });
+
+      const headers = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(String(base).includes("ngrok")
+          ? { "ngrok-skip-browser-warning": "true" }
+          : {}),
+      };
+
+      const res = await fetch(messagesUrl, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const raw = await res.text();
+      let json;
+      try {
+        json = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(raw || `HTTP ${res.status}`);
+      }
+      if (!res.ok) {
+        Toast.show({
+          type: "error",
+          text1: json?.error || "Error",
+          text2: json?.message || res.statusText || "Upload failed",
+        });
+        throw new Error(json?.message || "Upload failed");
+      }
+      data.callback?.();
+      thunkAPI.dispatch(GetChats({ callback: () => {} }));
+      return json;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const getNotifications = createAsyncThunk(
-  'general/getNotifications',
+  "general/getNotifications",
   async (data, thunkAPI) => {
     try {
       let result = await apiRequest.get(endPoints.GetNotifications);
-      data.callback()
+      data.callback();
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
+
 const GetSingleChat = createAsyncThunk(
-  'general/GetSingleChat',
+  "general/GetSingleChat",
   async (data, thunkAPI) => {
     try {
-      let result = await apiRequest.get(`${endPoints.GetSingleChat}?chatId=${data.chat}`);
-      data.callback(result.data);
+      let result = await apiRequest.get(
+        `${endPoints.GetSingleChat}?chatId=${data.chat}`
+      );
+      data.callback?.(result.data);
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
+
 const UpdateChatSession = createAsyncThunk(
-  'general/UpdateChatSession',
+  "general/UpdateChatSession",
   async (data, thunkAPI) => {
     try {
       let { callback, ...rest } = data;
       let result = await apiRequest.patch(endPoints.UpdateChatSession, {
-        ...rest
+        ...rest,
       });
-      callback(result.data)
+      callback?.(result.data);
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const ReadMessages = createAsyncThunk(
-  'general/ReadMessages',
+  "general/ReadMessages",
   async (data, thunkAPI) => {
     try {
       let { callback, ...rest } = data;
       let result = await apiRequest.patch(endPoints.GetChats, {
-        ...rest
+        ...rest,
       });
-      callback(result.data)
+      callback?.(result.data);
+      thunkAPI.dispatch(GetChats({ callback: () => {} }));
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const getLikesUsers = createAsyncThunk(
-  'general/getLikesUsers',
+  "general/getLikesUsers",
   async (data, thunkAPI) => {
     try {
-      let { callback, ...rest } = data;
+      let { callback } = data;
       let result = await apiRequest.get(endPoints.GetAllLikesUsers);
-      callback(result.data)
+      callback?.(result.data);
       return result.data;
     } catch (error) {
-      console.warn(error)
+      console.warn(error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 const RateSendFeedback = createAsyncThunk(
-  'general/RateSendFeedback',
+  "general/RateSendFeedback",
   async (data, thunkAPI) => {
     try {
       let { callback, ...rest } = data;
       let result = await apiRequest.post(endPoints.RatingAndFeedback, {
-        ...rest
+        ...rest,
       });
-      callback(result.data)
+      callback?.(result.data);
       return result.data;
     } catch (error) {
       let eRes = error?.response?.data;
@@ -554,18 +638,18 @@ const RateSendFeedback = createAsyncThunk(
         Toast.show({
           type: "error",
           text1: eRes.error,
-          text2: eRes.message
-        })
-      }
-      else
+          text2: eRes.message,
+        });
+      } else {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message
-        })
+          text2: error.message,
+        });
+      }
     }
-  },
-)
+  }
+);
 
 export default {
   DashboardListing,
@@ -587,5 +671,5 @@ export default {
   ReadMessages,
   getLikesUsers,
   SuperLikeUser,
-  RateSendFeedback
-}
+  RateSendFeedback,
+};

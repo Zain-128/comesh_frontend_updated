@@ -1,17 +1,20 @@
-import React, { useEffect } from 'react';
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
-  View
-} from 'react-native';
+  View,
+} from "react-native";
 import {
   heightPercentageToDP,
   widthPercentageToDP,
 } from 'react-native-responsive-screen';
+import Toast from "react-native-toast-message";
 import AdIcon from 'react-native-vector-icons/AntDesign';
 import Video from "react-native-video";
 import { useDispatch, useSelector } from 'react-redux';
@@ -27,32 +30,49 @@ import helper from '../../../utils/helper';
 
 const Profile = props => {
   useEffect(() => {
-    StatusBar.setBarStyle('light-content');
+    StatusBar.setBarStyle("light-content");
   }, []);
 
-  const { userData } = useSelector(state => state.user);
-  const { othersProfile } = useSelector(state => state.globalState);
+  const { userData } = useSelector((state) => state.user);
+  const { othersProfile } = useSelector((state) => state.globalState);
   const [profileVideoFailed, setProfileVideoFailed] = React.useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
   const dispatch = useDispatch();
-  const { userID = "" } = props.route.params;
+  const routeUserId = props.route.params?.userID;
+  const profileMatches =
+    othersProfile && routeUserId && String(othersProfile._id) === String(routeUserId);
 
-  useEffect(() => {
-    let params = props.route.params;
-    //if (othersProfile?._id != params.userID)
-    getData();
-  }, [])
+  const loadProfile = useCallback(async () => {
+    const uid = props.route.params?.userID;
+    if (!uid) {
+      setLoading(false);
+      setFetchFailed(true);
+      return;
+    }
+    setLoading(true);
+    setFetchFailed(false);
+    dispatch(setLoader(true));
+    try {
+      await dispatch(globalActions.GetOthersProfile({ userId: uid })).unwrap();
+    } catch {
+      setFetchFailed(true);
+    } finally {
+      setLoading(false);
+      dispatch(setLoader(false));
+    }
+  }, [dispatch, props.route.params?.userID]);
 
-  const getData = async () => {
-    let params = props.route.params;
-    dispatch(setLoader(true))
-    await dispatch(globalActions.GetOthersProfile({
-      userId: params.userID,
-      callback: (data) => {
-        //console.warn(data?.data?.likedByMe)
-      }
-    }));
-    dispatch(setLoader(false));
-  }
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
+  const otherDisplayName =
+    [othersProfile?.firstName, othersProfile?.lastName].filter(Boolean).join(" ").trim() ||
+    othersProfile?.email ||
+    "";
 
   const Like = async (userId) => {
     //dispatch(setLoader(true))
@@ -62,6 +82,8 @@ const Profile = props => {
         console.warn(data)
         if (data.success) {
           dispatch(updateUserLikes({ userId, type: "like" }))
+          dispatch(globalActions.GetChats({ callback: () => { } }));
+          dispatch(globalActions.getLikesUsers({ callback: () => { } }));
         }
       }
     }));
@@ -100,8 +122,9 @@ const Profile = props => {
   }
 
   const getAvailability = () => {
-    let fTimeArr = othersProfile?.availabilityFrom.split(" ");
-    let tTimeArr = othersProfile?.availabilityTo.split(" ");
+    if (!othersProfile?.availabilityFrom || !othersProfile?.availabilityTo) return "";
+    let fTimeArr = othersProfile.availabilityFrom.split(" ");
+    let tTimeArr = othersProfile.availabilityTo.split(" ");
     let tDayArr = othersProfile?.availabilityTo.split(",");
     let tDayArrSpace = String(tDayArr[tDayArr.length - 1]).split(" ");
     let fromTime = fTimeArr[1] + " " + fTimeArr[2];
@@ -114,6 +137,48 @@ const Profile = props => {
       return fromDay + " to " + toDay + "\n" + fromTime + " - " + toTime + " " + zone;
   }
 
+
+  if (!routeUserId) {
+    return (
+      <AppContainer>
+        <View style={styles.centered}>
+          <Typography textType="medium" size={16} color="#666" children="Invalid profile link." />
+        </View>
+      </AppContainer>
+    );
+  }
+
+  if (!profileMatches) {
+    if (loading) {
+      return (
+        <AppContainer>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Typography style={{ marginTop: 16 }} textType="medium" size={14} color="#888" children="Loading profile…" />
+          </View>
+        </AppContainer>
+      );
+    }
+    if (fetchFailed) {
+      return (
+        <AppContainer>
+          <View style={styles.centered}>
+            <Typography textType="semiBold" size={16} color="#333" align="center" children="Could not load this profile." />
+            <TouchableOpacity style={styles.retryBtn} onPress={loadProfile} activeOpacity={0.85}>
+              <Typography textType="semiBold" size={15} color="#fff" children="Retry" />
+            </TouchableOpacity>
+          </View>
+        </AppContainer>
+      );
+    }
+    return (
+      <AppContainer>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </AppContainer>
+    );
+  }
 
   return (
     <AppContainer>
@@ -134,7 +199,10 @@ const Profile = props => {
           {othersProfile?.profileVideo && !profileVideoFailed ? (
             <Video
               repeat={true}
-              source={{ uri: helper.resolveMediaUrl(othersProfile?.profileVideo) }}
+              muted
+              playInBackground={false}
+              playWhenInactive={false}
+              source={helper.getMediaSource(othersProfile?.profileVideo) || { uri: helper.resolveMediaUrl(othersProfile?.profileVideo) }}
               poster={helper.resolveMediaUrl(othersProfile?.profileVideoThumbnail || othersProfile?.profileImage) || undefined}
               posterResizeMode="cover"
               onError={() => setProfileVideoFailed(true)}
@@ -144,9 +212,8 @@ const Profile = props => {
           ) : (
             <Image
               source={
-                helper.resolveMediaUrl(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail)
-                  ? { uri: helper.resolveMediaUrl(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail) }
-                  : IMAGES.men
+                helper.getMediaSourceOrUri(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail) ??
+                IMAGES.men
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -182,7 +249,7 @@ const Profile = props => {
         <View style={styles.profileContent}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Typography size={26} textType="bold">
-              {othersProfile?.firstName + " " + othersProfile?.lastName + " "}
+              {otherDisplayName ? `${otherDisplayName} ` : ""}
               <Typography textType="medium" children={othersProfile?.pronouns} size={14} />
             </Typography>
             {
@@ -205,7 +272,7 @@ const Profile = props => {
               gap: 10,
               marginTop: 8,
             }}>
-            {othersProfile?.niche.map((i, index) => (
+            {(Array.isArray(othersProfile?.niche) ? othersProfile.niche : []).map((i, index) => (
               <View style={styles.profileBadge}>
                 <Typography children={helper.sentenceCase(i)} color="#fff" size={12} />
               </View>
@@ -348,14 +415,15 @@ const Profile = props => {
                 flexDirection: 'row',
                 marginTop: 10,
               }}>
-              {othersProfile?.videos && othersProfile?.videos.map(i => (
+              {Array.isArray(othersProfile?.videos) && othersProfile.videos.map((i) => (
                 <TouchableOpacity
                   activeOpacity={1}
                   style={{}}>
                   <Video
-                    source={{ uri: helper.resolveMediaUrl(i.url) }}
+                    source={helper.getMediaSource(i.url) || { uri: helper.resolveMediaUrl(i.url) }}
                     poster={helper.resolveMediaUrl(i.thumbnailUrl || othersProfile?.profileVideoThumbnail) || undefined}
                     posterResizeMode="cover"
+                    muted
                     paused
                     controls
                     style={{
@@ -371,7 +439,7 @@ const Profile = props => {
           <View style={{ marginTop: 20 }}>
             <Typography children={`Preferences`} size={18} textType="bold" style={{ marginBottom: 15 }} />
             {
-              othersProfile?.questionAndAnswers.length > 0 && othersProfile?.questionAndAnswers.findIndex((f) => f.question == 'How often do you make content?') != -1 &&
+              Array.isArray(othersProfile?.questionAndAnswers) && othersProfile.questionAndAnswers.length > 0 && othersProfile.questionAndAnswers.findIndex((f) => f.question == 'How often do you make content?') != -1 &&
               <>
                 <SelectPicker
                   disabled={true}
@@ -412,7 +480,7 @@ const Profile = props => {
               { label: "Pet", value: "Pet" },]}
             /> */}
             {
-              othersProfile?.questionAndAnswers.length > 0 && othersProfile?.questionAndAnswers.findIndex((f) => f.question == 'How often do you make content?') != -1 &&
+              Array.isArray(othersProfile?.questionAndAnswers) && othersProfile.questionAndAnswers.length > 0 && othersProfile.questionAndAnswers.findIndex((f) => f.question == 'How often do you make content?') != -1 &&
               <SelectPicker
                 val={othersProfile?.questionAndAnswers.find((f) => f.question == 'Select which applies?')?.answer}
                 disabled={true}
@@ -429,14 +497,14 @@ const Profile = props => {
               justifyContent: 'center',
               gap: 40,
             }}>
-            <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => props.navigation.navigate('Block', { report: true, userID })}>
+            <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => props.navigation.navigate('Block', { report: true, userID: routeUserId })}>
               <Image
                 source={IMAGES.reportIcon}
                 style={{ width: 40, height: 40 }}
               />
               <Typography children={'Report'} />
             </TouchableOpacity>
-            <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => props.navigation.navigate('Block', { report: false, userID })}>
+            <TouchableOpacity style={{ alignItems: 'center' }} onPress={() => props.navigation.navigate('Block', { report: false, userID: routeUserId })}>
               <Image
                 source={IMAGES.blockIcon}
                 style={{ width: 40, height: 40 }}
@@ -521,5 +589,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 10,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    minHeight: heightPercentageToDP(40),
+  },
+  retryBtn: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
   },
 });

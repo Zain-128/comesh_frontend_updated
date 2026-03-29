@@ -2,20 +2,66 @@ import { io } from "socket.io-client";
 import endPoints from "../constants/endPoints";
 
 let socket = null;
+/** Invalidate connection when auth changes (login / token refresh). */
+let lastConnectKey = "";
 
+/**
+ * REST base is like `https://host/comesh/api` — Socket.IO must hit the HTTP server root
+ * with the **default** namespace `/`. Using `https://host/comesh` makes the client join
+ * namespace `/comesh`, which does not match `@WebSocketGateway()` (namespace `/`).
+ */
 const getSocketBaseUrl = () => {
-  const baseUrl = endPoints.baseUrl || "";
-  return baseUrl.replace(/\/api\/?$/, "");
+  const raw = (endPoints.baseUrl || "").trim();
+  try {
+    const u = new URL(raw);
+    return u.origin;
+  } catch {
+    return raw.replace(/\/api\/?$/i, "").replace(/\/comesh\/api\/?$/i, "").split("/comesh")[0] || raw;
+  }
+};
+
+const connectKey = (token, userId) => `${String(userId || "")}|${String(token || "")}`;
+
+const buildHandshakeHeaders = (bearer) => {
+  const base = getSocketBaseUrl();
+  const isNgrok = String(base).includes("ngrok");
+  const h = {
+    ...(bearer ? { Authorization: bearer } : {}),
+    ...(isNgrok ? { "ngrok-skip-browser-warning": "true" } : {}),
+  };
+  return Object.keys(h).length ? h : undefined;
 };
 
 const connect = ({ token, userId }) => {
-  if (socket?.connected) return socket;
+  const key = connectKey(token, userId);
+  if (socket && lastConnectKey === key) {
+    if (!socket.connected) socket.connect();
+    return socket;
+  }
+  if (socket) {
+    try {
+      socket.removeAllListeners();
+    } catch {
+      /* ignore */
+    }
+    socket.disconnect();
+    socket = null;
+  }
+  lastConnectKey = key;
+
   const bearer = token ? `Bearer ${token}` : undefined;
+  const handshakeHeaders = buildHandshakeHeaders(bearer);
 
   socket = io(getSocketBaseUrl(), {
     transports: ["websocket", "polling"],
     auth: bearer ? { token: bearer } : undefined,
-    extraHeaders: bearer ? { Authorization: bearer } : undefined,
+    extraHeaders: handshakeHeaders,
+    /** RN + ngrok: polling upgrade must send the header or handshake gets HTML interstitial. */
+    transportOptions: handshakeHeaders
+      ? {
+          polling: { extraHeaders: handshakeHeaders },
+        }
+      : undefined,
     query: userId ? { userId } : undefined,
     reconnection: true,
     reconnectionAttempts: 10,
@@ -34,6 +80,7 @@ const disconnect = () => {
   if (!socket) return;
   socket.disconnect();
   socket = null;
+  lastConnectKey = "";
 };
 
 const joinChat = (chatId) => {
