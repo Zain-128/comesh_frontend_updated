@@ -1,5 +1,10 @@
 import axios from "axios";
+import NetInfo from "@react-native-community/netinfo";
 import endPoints from "../constants/endPoints";
+
+/** Plain actions — avoid importing globalSlice here (circular: slice → globalActions → apiRequest). */
+const ACTION_NO_INTERNET = "global/setNoInternet";
+const ACTION_SET_LOADER = "global/setLoader";
 
 /** Set from `redux/store.js` after `configureStore` to avoid circular imports. */
 let storeRef;
@@ -83,8 +88,43 @@ apiRequest.interceptors.response.use(
         res?.data ?? error.message
       );
     }
-    return Promise.reject(error);
+    return handleOfflineAfterFailure(error);
   }
 );
+
+/**
+ * After timeout or transport failure: if device is offline, show No Internet screen.
+ */
+function handleOfflineAfterFailure(error) {
+  return (async () => {
+    try {
+      if (!storeRef) {
+        return Promise.reject(error);
+      }
+      const code = error?.code;
+      const noResponse = !error?.response;
+      const isTimeout = code === "ECONNABORTED";
+      const msg = String(error?.message || "");
+      const isNetworkErr =
+        noResponse &&
+        (msg === "Network Error" ||
+          code === "ERR_NETWORK" ||
+          /network/i.test(msg));
+      if (!isTimeout && !isNetworkErr) {
+        return Promise.reject(error);
+      }
+      const net = await NetInfo.fetch();
+      const offline =
+        net.isConnected === false || net.isInternetReachable === false;
+      if (offline) {
+        storeRef.dispatch({ type: ACTION_NO_INTERNET, payload: true });
+        storeRef.dispatch({ type: ACTION_SET_LOADER, payload: false });
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return Promise.reject(error);
+  })();
+}
 
 export default apiRequest;

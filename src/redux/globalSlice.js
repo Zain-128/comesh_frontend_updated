@@ -22,6 +22,8 @@ const globalSlice = createSlice({
   name: "global",
   initialState: {
     isLoader: false,
+    /** Full-screen offline UI after API timeout / network error when device has no connection */
+    showNoInternet: false,
     dashboard: {
       data: [],
     },
@@ -35,6 +37,9 @@ const globalSlice = createSlice({
   reducers: {
     setLoader(state, action) {
       state.isLoader = action.payload;
+    },
+    setNoInternet(state, action) {
+      state.showNoInternet = action.payload;
     },
     setDashLoader(state, action) {
       state.dashLoading = action.payload;
@@ -287,6 +292,11 @@ const globalSlice = createSlice({
   },
 });
 
-export const { setLoader, setDashLoader, AppendNewMessage, emptyDashData } =
-  globalSlice.actions;
+export const {
+  setLoader,
+  setDashLoader,
+  AppendNewMessage,
+  emptyDashData,
+  setNoInternet,
+} = globalSlice.actions;
 export default globalSlice.reducer;

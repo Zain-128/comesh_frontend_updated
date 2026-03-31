@@ -11,6 +11,23 @@ import colors from './constants/colors';
 import RootStack from './navigation/RootStack';
 import { persistor, store } from './redux/store';
 
+// Hide timeout-related error toasts globally.
+if (!Toast.__timeoutFilterPatched) {
+  const originalShow = Toast.show?.bind(Toast);
+  Toast.show = (options = {}) => {
+    const msg = `${options?.text1 || ''} ${options?.text2 || ''}`.toLowerCase();
+    if (
+      msg.includes('timeout') ||
+      msg.includes('timed out') ||
+      msg.includes('econnaborted')
+    ) {
+      return;
+    }
+    return originalShow?.(options);
+  };
+  Toast.__timeoutFilterPatched = true;
+}
+
 /** Gradient edge-to-edge; app UI sits inside SafeAreaView (safe-area-context). */
 const App = () => {
   return (
