@@ -37,6 +37,8 @@
 	<string>Need access to record video and capture picture to upload in profile video,media etc </string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Please allow location to get nearby users in dashboard users listings</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Please allow location access to show nearby users and improve matching when app is in use.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Need access to record video to upload in profile video,media etc </string>
 	<key>NSPhotoLibraryUsageDescription</key>
