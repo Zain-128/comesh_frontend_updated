@@ -1,7 +1,8 @@
 import LottieView from 'lottie-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
+  Linking,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
@@ -32,7 +33,9 @@ const Home = props => {
   const { dashboard, dashLoading } = useSelector(state => state.globalState);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCIndex] = useState(0);
+  const [failedVideoIds, setFailedVideoIds] = useState([]);
   const dispatch = useDispatch();
+  const failedSet = useMemo(() => new Set(failedVideoIds), [failedVideoIds]);
 
 
   useEffect(() => {
@@ -214,25 +217,42 @@ const Home = props => {
                 renderCard={(card, cardIndex) => {
                   const videoSrc = helper.getMediaSource(card?.profileVideo);
                   const poster = helper.resolveMediaUrl(card?.profileVideoThumbnail || card?.profileImage);
+                  const shouldShowVideo = !!videoSrc && !failedSet.has(String(card?._id));
                   //images.dummy_video5
                   return (
                     <View style={{
                       height: ITEM_HEIGHT,
                       width: widthPercentageToDP(100)
                     }}>
-                      <Video
-                        paused={cardIndex == currentIndex ? false : true}
-                        repeat={true}
-                        muted={true}
-                        source={videoSrc || images.dummy_video5}
-                        poster={poster || undefined}
-                        posterResizeMode="cover"
-                        resizeMode={'cover'}
-                        style={{
-                          ...StyleSheet.absoluteFill,
-                          backgroundColor: 'black'
-                        }}
-                      />
+                      {shouldShowVideo ? (
+                        <Video
+                          paused={cardIndex == currentIndex ? false : true}
+                          repeat={true}
+                          muted={true}
+                          source={videoSrc}
+                          poster={poster || undefined}
+                          posterResizeMode="cover"
+                          onError={() => {
+                            const id = String(card?._id || "");
+                            if (!id) return;
+                            setFailedVideoIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+                          }}
+                          resizeMode={'cover'}
+                          style={{
+                            ...StyleSheet.absoluteFill,
+                            backgroundColor: '#111'
+                          }}
+                        />
+                      ) : (
+                        <Image
+                          source={helper.getMediaSourceOrUri(card?.profileImage || card?.profileVideoThumbnail) || IMAGES.men}
+                          resizeMode="cover"
+                          style={{
+                            ...StyleSheet.absoluteFill,
+                            backgroundColor: '#111'
+                          }}
+                        />
+                      )}
                       <TouchableOpacity
                         activeOpacity={1}
                         style={styles.profileContent}

@@ -27,7 +27,21 @@ const OnBoard4 = (props) => {
   const [selectedDates, setSelectedDates] = useState();
   const [values, setValues] = useState(data);
   const userProfile = useSelector(state => state.user.userRegister);
+  /** Media saved on step 1 lives in `userData` after upload / GetMyProfile — merge so final update does not drop them. */
+  const userData = useSelector(state => state.user.userData);
   const dispatch = useDispatch();
+
+  /** URLs already saved on the server during onboarding step 1 — re-send on final profile update so nothing is dropped. */
+  const mediaFromServer = (() => {
+    const m = {};
+    if (userData?.profileImage) m.profileImage = userData.profileImage;
+    if (userData?.profileVideo) m.profileVideo = userData.profileVideo;
+    if (userData?.profileVideoThumbnail) {
+      m.profileVideoThumbnail = userData.profileVideoThumbnail;
+    }
+    return m;
+  })();
+
   const [Day, setDay] = useState("");
   const [timezone, setTimezone] = useState("");
   const [Year, setYear] = useState("");
@@ -91,30 +105,47 @@ const OnBoard4 = (props) => {
     dispatch(setLoader(true))
     try {
       let token = await messaging().getToken();
-
-
-      await dispatch(userActions.UpdateProfile({
+      const hasAvailability =
+        !!String(Day || "").trim() &&
+        !!String(From || "").trim() &&
+        !!String(To || "").trim() &&
+        !!String(timezone || "").trim();
+      const payload = {
         ...userProfile,
+        ...mediaFromServer,
         email: userProfile.email ? userProfile.email.replace(" ", "") : "no-mail@comesh.com",
         willingToTravel: values[0].selected == 'Yes',
         showLocation: false,//values[values.length - 1].selected == 'Yes',
         followers: String(values[1].selected),
-        // availability: values[2].selected.toISOString(),
-        availabilityFrom: `${Day} ${From}`,
-        availabilityTo: `${Day} ${To}`,
         isFirstTime: true,
         deviceToken: token,
-        timeZone: timezone,
         ...location ? location : {},
+      };
+      if (hasAvailability) {
+        payload.availabilityFrom = `${Day} ${From}`;
+        payload.availabilityTo = `${Day} ${To}`;
+        payload.timeZone = timezone;
+      }
+
+      await dispatch(userActions.UpdateProfile({
+        ...payload,
         callback: (data) => {
-          props.navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [
-                { name: 'GestureGuide' },
-              ],
-            })
-          )
+          if (data?.success) {
+            props.navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [
+                  { name: 'GestureGuide' },
+                ],
+              })
+            )
+          } else {
+            Toast.show({
+              text1: "Error",
+              text2: data?.message || "Could not create account. Please try again.",
+              type: "error"
+            });
+          }
         }
       }))
 
@@ -138,6 +169,7 @@ const OnBoard4 = (props) => {
 
       await dispatch(userActions.UpdateProfile({
         ...userProfile,
+        ...mediaFromServer,
         deviceToken: token,
         isFirstTime: true,
         callback: (data) => {

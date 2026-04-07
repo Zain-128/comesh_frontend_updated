@@ -244,6 +244,12 @@ const OnBoard3 = (props) => {
               color='#000'
               size={30}
             />
+            <Typography
+              children={"This may take a few moments to load."}
+              textType='medium'
+              color='#666'
+              size={14}
+            />
             <Progress.Bar progress={progress} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
           </View>
         </View>

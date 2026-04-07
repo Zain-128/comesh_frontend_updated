@@ -5,7 +5,7 @@ import Toast from "react-native-toast-message";
 import RNFetchBlob from "react-native-blob-util";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
-import { compressVideoForUpload } from "../../utils/compressMedia";
+import { compressImageForUpload, compressVideoForUpload } from "../../utils/compressMedia";
 
 /** RNFetchBlob returns body as string; proxies/nginx may return HTML on 413/502 — JSON.parse throws on `<`. */
 function parseUploadJsonBody(raw) {
@@ -205,6 +205,38 @@ const UploadVideo = createAsyncThunk(
       const filename = baseName.toLowerCase().endsWith(".mp4")
         ? baseName
         : `${baseName}.mp4`;
+
+      const wrapLocalFile = (fileUri) =>
+        RNFetchBlob.wrap(decodeURIComponent(String(fileUri)).replace("file://", ""));
+
+      const parts = [];
+
+      if (data.profileImage?.uri) {
+        const imgCompressed = await compressImageForUpload(data.profileImage.uri);
+        const imgUri = imgCompressed || data.profileImage.uri;
+        const rawName =
+          (imgUri && String(imgUri).split("/").pop()) ||
+          data.profileImage.name ||
+          data.profileImage.fileName ||
+          "avatar.jpg";
+        const imgFilename = /\.(jpe?g|png|gif|webp)$/i.test(rawName)
+          ? rawName
+          : `${rawName.replace(/\.[^/.]+$/, "") || "avatar"}.jpg`;
+        parts.push({
+          name: "profileImage",
+          filename: imgFilename,
+          type: data.profileImage.type || "image/jpeg",
+          data: wrapLocalFile(imgUri),
+        });
+      }
+
+      parts.push({
+        name: "profileVideo",
+        filename,
+        type: data.video.type || "video/mp4",
+        data: wrapLocalFile(uri),
+      });
+
       let resp = await RNFetchBlob.fetch(
         "PUT",
         profileUploadUrl(),
@@ -212,21 +244,7 @@ const UploadVideo = createAsyncThunk(
           Authorization: `Bearer ${thunkAPI.getState().user.token}`,
           "Content-Type": "multipart/form-data",
         },
-        [
-          {
-            name: "profileVideo",
-            filename,
-            type: data.video.type || "video/mp4",
-            data:
-              Platform.OS === "android"
-                ? RNFetchBlob.wrap(
-                    decodeURIComponent(uri).replace("file://", "")
-                  )
-                : RNFetchBlob.wrap(
-                    decodeURIComponent(uri).replace("file://", "")
-                  ),
-          },
-        ]
+        parts
       ).uploadProgress((sent, total) => {
         data.onProgress({ sent, total });
       });

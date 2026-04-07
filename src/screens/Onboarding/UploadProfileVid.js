@@ -5,13 +5,14 @@ import * as Progress from 'react-native-progress';
 import { widthPercentageToDP } from 'react-native-responsive-screen';
 import Toast from "react-native-toast-message";
 import Video from 'react-native-video';
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import PrimaryButton from '../../components/Buttons/PrimaryButton';
 import Container from '../../components/Container';
 import Text from '../../components/Text';
 import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
 import userActions from '../../redux/actions/userActions';
+import { setUser } from '../../redux/userSlice';
 
 /** Handles object (from thunk) or legacy string body; never throws on HTML/error pages. */
 function normalizeUploadResponse(data) {
@@ -33,10 +34,30 @@ function normalizeUploadResponse(data) {
 const UploadProfileVid = (props) => {
 
   const [media, setMedia] = useState(null);
+  /** Profile photo (avatar) — shown in chat / messages lists. */
+  const [avatar, setAvatar] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(null);
   const dispatch = useDispatch();
+  const userId = useSelector((s) => s.user?.userData?._id);
   const { launchImageLibrary } = useImagePickerLock();
+
+  const SelectAvatar = () => {
+    launchImageLibrary({
+      mediaType: "photo",
+      selectionLimit: 1,
+    }, (response) => {
+      if (response.didCancel || response.errorMessage) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
+      setAvatar({
+        name: asset.fileName,
+        size: asset.fileSize,
+        type: asset.type || "image/jpeg",
+        uri: asset.uri,
+      });
+    });
+  };
 
   const SelectVideo = () => {
     // Alert.alert("Select", "Please select an option", [
@@ -98,9 +119,18 @@ const UploadProfileVid = (props) => {
       })
       return;
     }
+    if (!avatar?.uri) {
+      Toast.show({
+        text1: "Warning",
+        text2: "Please add a profile photo (avatar) to continue",
+        type: "error"
+      })
+      return;
+    }
     setUploading(true)
     await dispatch(userActions.UploadVideo({
       video: media,
+      profileImage: avatar,
       redirect: false,
       onProgress: (pe) => {
         setTimeout(() => {
@@ -111,6 +141,20 @@ const UploadProfileVid = (props) => {
         const res = normalizeUploadResponse(data);
         if (res.success) {
           setProgress(null);
+          /** Persist profile image + video URLs in Redux so later onboarding steps send them to the API. */
+          const updated = res.data;
+          if (updated && typeof updated === "object") {
+            const patch = {};
+            if (updated.profileImage) patch.profileImage = updated.profileImage;
+            if (updated.profileVideo) patch.profileVideo = updated.profileVideo;
+            if (updated.profileVideoThumbnail) {
+              patch.profileVideoThumbnail = updated.profileVideoThumbnail;
+            }
+            if (Object.keys(patch).length) dispatch(setUser(patch));
+          }
+          if (userId) {
+            dispatch(userActions.GetMyProfile(userId));
+          }
           props.navigation.navigate("OnBoard2");
         } else {
           Toast.show({
@@ -135,6 +179,35 @@ const UploadProfileVid = (props) => {
         <Text style={{ fontWeight: "bold", fontSize: 22 }} >
           Let's Continue building <Text style={{ color: colors.accent }}>Your</Text> Profile
         </Text>
+        <View style={{ alignItems: "center", marginTop: 16 }}>
+          <Text style={{ fontWeight: "600", fontSize: 16, marginBottom: 10 }}>
+            Profile photo
+          </Text>
+          <TouchableOpacity onPress={SelectAvatar} activeOpacity={0.85}>
+            <View style={{
+              width: 100,
+              height: 100,
+              borderRadius: 50,
+              overflow: "hidden",
+              borderWidth: 2,
+              borderColor: colors.primary,
+              backgroundColor: "#eee",
+              justifyContent: "center",
+              alignItems: "center",
+            }}>
+              {avatar?.uri ? (
+                <Image source={{ uri: avatar.uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+              ) : (
+                <Text style={{ color: colors.textLight, fontSize: 13, textAlign: "center", padding: 8 }}>
+                  Tap to add{"\n"}photo
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={{ color: colors.textLight, fontSize: 12, marginTop: 8, textAlign: "center" }}>
+            This photo is your avatar in chats and messages.
+          </Text>
+        </View>
         <View style={{ flex: 1, overflow: 'hidden', borderRadius: 20, borderWidth: 1, borderStyle: "dashed", borderColor: "#D8D8D8", marginVertical: 20, backgroundColor: "#F9F9FC", justifyContent: "center", alignItems: 'center', }}>
           {
             media?.uri &&
@@ -174,6 +247,12 @@ const UploadProfileVid = (props) => {
               textType='bold'
               color='#000'
               size={30}
+            />
+            <Typography
+              children={"This may take a few moments to load."}
+              textType='medium'
+              color='#666'
+              size={14}
             />
             <Progress.Bar progress={progress ?? 0} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
           </View>

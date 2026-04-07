@@ -224,9 +224,12 @@ const ListItem = ({ item, index, navigation, userData }) => {
     item?.latestMessageTime ||
     item?.updatedAt ||
     item?.createdAt;
+  const peer = item?.usersData?.[0];
+  const avatarSource =
+    helper.getMediaSourceOrUri(peer?.profileImage || peer?.profileVideoThumbnail) ?? IMAGES.men;
   return (
     <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item })}>
-      <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/6596/6596121.png" }} style={styles.itemImage} />
+      <Image source={avatarSource} style={styles.itemImage} />
       <View style={styles.itemContent}>
         <View style={{ flex: 1 }}>
           <Typography children={item.usersData.length > 0 ? item.usersData[0].firstName + " " + item.usersData[0].lastName : "No name available"} size={15} />

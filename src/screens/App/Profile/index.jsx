@@ -71,8 +71,7 @@ const Profile = props => {
 
   const otherDisplayName =
     [othersProfile?.firstName, othersProfile?.lastName].filter(Boolean).join(" ").trim() ||
-    othersProfile?.email ||
-    "";
+    "Comesh User";
 
   const Like = async (userId) => {
     //dispatch(setLoader(true))

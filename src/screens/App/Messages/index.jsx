@@ -478,7 +478,11 @@ const Messages = (props) => {
       </TouchableOpacity>
       <TouchableOpacity style={styles.headerUser} onPress={goProfile} activeOpacity={0.85}>
         <Image
-          source={{ uri: "https://cdn-icons-png.flaticon.com/512/6596/6596121.png" }}
+          source={
+            helper.getMediaSourceOrUri(
+              otherUser?.profileImage || otherUser?.profileVideoThumbnail
+            ) ?? IMAGES.men
+          }
           style={styles.headerAvatar}
         />
         <View style={styles.flex1}>
