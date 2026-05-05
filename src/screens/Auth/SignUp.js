@@ -187,7 +187,7 @@ const Signup = (props) => {
                   email,
                   pronouns
                 }));
-                navigation.navigate("OnBoard1")
+                navigation.navigate('OnBoard1');
               }}
             />
           </View>

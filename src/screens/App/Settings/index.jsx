@@ -44,11 +44,8 @@ const Settings = props => {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: heightPercentageToDP(3) }}>
         <Typography children={"Personal Information"} size={17} textType='semiBold' />
         <View style={{ gap: 15, backgroundColor: "#fff", shadowColor: "#999", shadowOffset: { height: 5, width: 5 }, shadowOpacity: 0.4, shadowRadius: 5, elevation: 10, padding: 20, borderRadius: 20 }}>
-          <TouchableOpacity onPress={() => Toast.show({
-            text1: "Message",
-            text2: "This feature will be implemented in the upcoming version",
-            type: "success"
-          })}>
+          <TouchableOpacity
+            onPress={() => props.navigation.navigate('Subscription')}>
             <View style={{ flexDirection: 'row', justifyContent: "space-between" }}>
               <Typography children={"Subscription"} textType='semiBold' />
               <MaterialCommunityIcons size={23} color='#5c5c5c' name='chevron-right' />

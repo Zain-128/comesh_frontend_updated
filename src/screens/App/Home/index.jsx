@@ -1,5 +1,6 @@
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
+import Toast from 'react-native-toast-message';
 import {
   Image,
   Linking,
@@ -24,6 +25,12 @@ import globalActions from '../../../redux/actions/globalActions';
 import { emptyDashData } from '../../../redux/globalSlice';
 import { updateUserLikes } from '../../../redux/userSlice';
 import helper from "../../../utils/helper";
+import {
+  swipeLimitReached,
+  swipesRemainingLabel,
+  effectiveTier,
+  TIERS,
+} from '../../../constants/subscriptionEntitlements';
 import Header from './Header';
 
 const ITEM_HEIGHT = heightPercentageToDP(100) * 0.725;
@@ -36,6 +43,13 @@ const Home = props => {
   const [failedVideoIds, setFailedVideoIds] = useState([]);
   const dispatch = useDispatch();
   const failedSet = useMemo(() => new Set(failedVideoIds), [failedVideoIds]);
+
+  const activeUserId = useMemo(() => {
+    const list = dashboard?.data;
+    if (!Array.isArray(list) || !list.length) return null;
+    const idx = Math.min(Math.max(0, currentIndex), list.length - 1);
+    return list[idx]?._id ?? null;
+  }, [dashboard?.data, currentIndex]);
 
 
   useEffect(() => {
@@ -66,6 +80,14 @@ const Home = props => {
   }
 
   const SuperLike = async (userId) => {
+    if (effectiveTier(userData) === TIERS.CREATOR_ACCESS) {
+      Toast.show({
+        type: 'info',
+        text1: 'Collab Pro',
+        text2: 'Super like is available on Collab Pro and above.',
+      });
+      return;
+    }
     //dispatch(setLoader(true))
     await dispatch(globalActions.SuperLikeUser({
       userId,
@@ -84,6 +106,14 @@ const Home = props => {
   }
 
   const Like = async (userId) => {
+    if (swipeLimitReached(userData)) {
+      Toast.show({
+        type: 'info',
+        text1: 'Daily limit',
+        text2: `${swipesRemainingLabel(userData)}. Upgrade to Collab Pro for unlimited swipes.`,
+      });
+      return;
+    }
     //dispatch(setLoader(true))
     await dispatch(globalActions.likeUser({
       userId,
@@ -214,7 +244,7 @@ const Home = props => {
                 outputCardOpacityRangeX={[0, 1, 1, 1, 1]}
                 outputCardOpacityRangeY={[0, 1, 1, 1, 1]}
                 animateOverlayLabelsOpacity
-                renderCard={(card, cardIndex) => {
+                renderCard={(card) => {
                   const videoSrc = helper.getMediaSource(card?.profileVideo);
                   const poster = helper.resolveMediaUrl(card?.profileVideoThumbnail || card?.profileImage);
                   const shouldShowVideo = !!videoSrc && !failedSet.has(String(card?._id));
@@ -224,35 +254,19 @@ const Home = props => {
                       height: ITEM_HEIGHT,
                       width: widthPercentageToDP(100)
                     }}>
-                      {shouldShowVideo ? (
-                        <Video
-                          paused={cardIndex == currentIndex ? false : true}
-                          repeat={true}
-                          muted={true}
-                          source={videoSrc}
-                          poster={poster || undefined}
-                          posterResizeMode="cover"
-                          onError={() => {
-                            const id = String(card?._id || "");
-                            if (!id) return;
-                            setFailedVideoIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-                          }}
-                          resizeMode={'cover'}
-                          style={{
-                            ...StyleSheet.absoluteFill,
-                            backgroundColor: '#111'
-                          }}
-                        />
-                      ) : (
-                        <Image
-                          source={helper.getMediaSourceOrUri(card?.profileImage || card?.profileVideoThumbnail) || IMAGES.men}
-                          resizeMode="cover"
-                          style={{
-                            ...StyleSheet.absoluteFill,
-                            backgroundColor: '#111'
-                          }}
-                        />
-                      )}
+                      <Video
+                        paused={String(card?._id) !== String(activeUserId)}
+                        repeat={true}
+                        muted={true}
+                        source={videoSrc || images.dummy_video5}
+                        poster={poster || undefined}
+                        posterResizeMode="cover"
+                        resizeMode={'cover'}
+                        style={{
+                          ...StyleSheet.absoluteFill,
+                          backgroundColor: 'black'
+                        }}
+                      />
                       <TouchableOpacity
                         activeOpacity={1}
                         style={styles.profileContent}

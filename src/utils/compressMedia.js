@@ -9,9 +9,9 @@ export async function compressImageForUpload(uri) {
   try {
     const out = await CompressorImage.compress(uri, {
       compressionMethod: "auto",
-      maxWidth: 1600,
-      maxHeight: 1600,
-      quality: 0.72,
+      maxWidth: 1280,
+      maxHeight: 1280,
+      quality: 0.65,
       output: "jpg",
     });
     return out || uri;
@@ -32,8 +32,8 @@ export async function compressVideoForUpload(uri, onProgress) {
       uri,
       {
         compressionMethod: "auto",
-        maxSize: 1280,
-        minimumFileSizeForCompress: 512 * 1024,
+        maxSize: 960,
+        minimumFileSizeForCompress: 256 * 1024,
       },
       typeof onProgress === "function" ? (progress) => onProgress(progress) : undefined
     );

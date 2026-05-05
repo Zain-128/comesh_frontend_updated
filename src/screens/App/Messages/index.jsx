@@ -92,6 +92,24 @@ const Messages = (props) => {
   const routeItem = params?.item;
   const chatId = routeItem?._id;
   const otherUser = routeItem?.usersData?.[0];
+  const [headerAvatarFail, setHeaderAvatarFail] = useState(false);
+
+  useEffect(() => {
+    setHeaderAvatarFail(false);
+  }, [
+    otherUser?._id,
+    otherUser?.profileImage,
+    otherUser?.profileVideoThumbnail,
+    otherUser?.profileVideo,
+  ]);
+
+  const otherUserAvatarSource =
+    otherUser &&
+    helper.getMediaSource(
+      otherUser.profileVideoThumbnail ||
+        otherUser.profileImage ||
+        otherUser.profileVideo,
+    );
 
   const scrollToQuoted = useCallback(
     (reply) => {

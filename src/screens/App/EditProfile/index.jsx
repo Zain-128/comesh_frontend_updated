@@ -35,6 +35,7 @@ import { IMAGES } from "../../../constants/images";
 import userActions from '../../../redux/actions/userActions';
 import { setLoader } from '../../../redux/globalSlice';
 import helper from "../../../utils/helper";
+import { maxProfileVideos } from "../../../constants/subscriptionEntitlements";
 import { RangeSliderInput } from "../../App/Filter";
 import Header from './Header';
 
@@ -166,28 +167,12 @@ const EditProfile = props => {
   }
 
   const SelectVideo = () => {
-    // Alert.alert("Select", "Please select an option", [
-    //   {
-    //     text: "Camera",
-    //     onPress: () => {
-    //       launchCamera({
-    //         mediaType: "video",
-    //         quality: 0.7,
-    //         videoQuality: "medium",
-    //       }, (response) => {
-    //         if (!response.didCancel && !response.errorMessage) {
-    //           let video = response.assets[0];
-    //           setMedia([...media, video]);
-    //         }
-    //       })
-    //     }
-    //   }, {
-    //     text: "Library",
-    //     onPress: () => {
-    if (media.length == 5) {
+    const cap = maxProfileVideos(userData);
+    const existing = (userData?.videos?.length || 0);
+    if (existing + media.length >= cap) {
       Toast.show({
-        text1: "Warning",
-        text2: "Media must contain 5 videos",
+        text1: "Limit",
+        text2: `Your plan allows up to ${cap} profile videos.`,
         type: "error"
       })
       return;
@@ -195,7 +180,7 @@ const EditProfile = props => {
     launchImageLibrary({
       mediaType: "video",
       videoQuality: "medium",
-      selectionLimit: 5
+      selectionLimit: Math.min(5, cap - existing - media.length)
     }, (response) => {
       if (!response.didCancel && !response.errorMessage) {
         let video = response.assets[0];

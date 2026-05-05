@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useImagePickerLock } from '../../utils/imagePickerSafe';
 import * as Progress from 'react-native-progress';
 import { widthPercentageToDP } from 'react-native-responsive-screen';
@@ -11,6 +12,7 @@ import Container from '../../components/Container';
 import Text from '../../components/Text';
 import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
+import endPoints from '../../constants/endPoints';
 import userActions from '../../redux/actions/userActions';
 import { setUser } from '../../redux/userSlice';
 
@@ -50,6 +52,11 @@ const UploadProfileVid = (props) => {
       if (response.didCancel || response.errorMessage) return;
       const asset = response.assets?.[0];
       if (!asset?.uri) return;
+      console.log("[UploadProfileVid] avatar picked", {
+        fileName: asset.fileName,
+        type: asset.type,
+        size: asset.fileSize,
+      });
       setAvatar({
         name: asset.fileName,
         size: asset.fileSize,
@@ -95,13 +102,20 @@ const UploadProfileVid = (props) => {
             type: "error"
           })
         }
-        else
+        else {
+          console.log("[UploadProfileVid] profile video picked", {
+            fileName: video.fileName,
+            type: video.type,
+            size: video.fileSize,
+            duration: video.duration,
+          });
           setMedia({
             name: video.fileName,
             size: video.fileSize,
             type: video.type,
             uri: video.uri,
           });
+        }
       }
     })
     //     }
@@ -109,6 +123,29 @@ const UploadProfileVid = (props) => {
     // ])
 
   }
+
+  const SelectProfilePhoto = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        quality: 0.88,
+      },
+      (response) => {
+        if (!response.didCancel && !response.errorMessage && response.assets?.[0]) {
+          const a = response.assets[0];
+          setProfilePhoto({
+            uri: a.uri,
+            type: a.type || 'image/jpeg',
+            fileName: a.fileName,
+            name: a.fileName,
+          });
+        }
+      },
+    );
+  };
 
   const UploadVideo = async () => {
     if (!media?.uri) {
@@ -127,45 +164,83 @@ const UploadProfileVid = (props) => {
       })
       return;
     }
-    setUploading(true)
-    await dispatch(userActions.UploadVideo({
-      video: media,
-      profileImage: avatar,
-      redirect: false,
-      onProgress: (pe) => {
-        setTimeout(() => {
-          setProgress((pe.sent / pe.total * 100) / 100)
-        }, 1000)
-      },
-      callback: (data) => {
+    const profileUrl = (() => {
+      const base = String(endPoints.baseUrl || "").replace(/\/+$/, "");
+      const path = String(endPoints.UpdateProfile || "");
+      return path.startsWith("/") ? `${base}${path}` : `${base}/${path}`;
+    })();
+    console.log("[UploadProfileVid] Continue → PUT", profileUrl);
+    console.log("[UploadProfileVid] multipart meta:", {
+      hasVideoUri: !!media?.uri,
+      videoType: media?.type,
+      videoName: media?.name,
+      hasAvatarUri: !!avatar?.uri,
+      avatarType: avatar?.type,
+    });
+
+    setUploading(true);
+    try {
+      const thunkResult = await dispatch(
+        userActions.UploadVideo({
+          video: media,
+          profileImage: avatar,
+          redirect: false,
+          onProgress: (pe) => {
+            setTimeout(() => {
+              setProgress((pe.sent / pe.total * 100) / 100);
+            }, 1000);
+          },
+          callback: (data) => {
+        console.log("[UploadProfileVid] API callback raw typeof:", typeof data);
+        console.log("[UploadProfileVid] API callback raw:", data);
         const res = normalizeUploadResponse(data);
-        if (res.success) {
-          setProgress(null);
-          /** Persist profile image + video URLs in Redux so later onboarding steps send them to the API. */
-          const updated = res.data;
-          if (updated && typeof updated === "object") {
-            const patch = {};
-            if (updated.profileImage) patch.profileImage = updated.profileImage;
-            if (updated.profileVideo) patch.profileVideo = updated.profileVideo;
-            if (updated.profileVideoThumbnail) {
-              patch.profileVideoThumbnail = updated.profileVideoThumbnail;
-            }
-            if (Object.keys(patch).length) dispatch(setUser(patch));
-          }
-          if (userId) {
-            dispatch(userActions.GetMyProfile(userId));
-          }
-          props.navigation.navigate("OnBoard2");
-        } else {
-          Toast.show({
-            type: "error",
-            text1: "Error",
-            text2: res.message || "Upload failed. Please try again.",
-          });
+        console.log(
+          "[UploadProfileVid] API normalized success:",
+          res?.success,
+          "message:",
+          res?.message,
+        );
+        try {
+          console.log(
+            "[UploadProfileVid] API normalized full:",
+            JSON.stringify(res, null, 2),
+          );
+        } catch (stringifyErr) {
+          console.log("[UploadProfileVid] API normalized (non-JSONable):", res, stringifyErr);
         }
-      },
-    }))
-    setUploading(false)
+            if (res.success) {
+              setProgress(null);
+              /** Persist profile image + video URLs in Redux so later onboarding steps send them to the API. */
+              const updated = res.data;
+              if (updated && typeof updated === "object") {
+                const patch = {};
+                if (updated.profileImage) patch.profileImage = updated.profileImage;
+                if (updated.profileVideo) patch.profileVideo = updated.profileVideo;
+                if (updated.profileVideoThumbnail) {
+                  patch.profileVideoThumbnail = updated.profileVideoThumbnail;
+                }
+                if (Object.keys(patch).length) dispatch(setUser(patch));
+              }
+              if (userId) {
+                dispatch(userActions.GetMyProfile(userId));
+              }
+              props.navigation.navigate("OnBoard2");
+            } else {
+              Toast.show({
+                type: "error",
+                text1: "Error",
+                text2: res.message || "Upload failed. Please try again.",
+              });
+            }
+          },
+        })
+      ).unwrap();
+      console.log("[UploadProfileVid] thunk unwrap result:", thunkResult);
+    } catch (thunkErr) {
+      console.log("[UploadProfileVid] thunk error / reject:", thunkErr);
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -262,5 +337,31 @@ const UploadProfileVid = (props) => {
     </Container >
   )
 };
+
+const styles = StyleSheet.create({
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  avatarRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImg: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+});
 
 export default UploadProfileVid;

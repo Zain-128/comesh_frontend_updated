@@ -32,13 +32,11 @@ const MyProfile = props => {
   const dispatch = useDispatch();
   const { userData } = useSelector(state => state.user);
 
-  console.log(":::::::::::::::::::", userData);
   useFocusEffect(
     useCallback(() => {
       const id = userData?._id;
       if (!id) return;
 
-      console.log(":::::::::::::::::::91", id);
       dispatch(userActions.GetMyProfile(id));
     }, [dispatch, userData?._id])
   );
@@ -86,7 +84,7 @@ const MyProfile = props => {
   return (
     <AppContainer>
       <ScrollView style={{ flex: 1 }}>
-        <View style={{ height: heightPercentageToDP(50) }}>
+        <View style={{ height: heightPercentageToDP(50), position: 'relative' }}>
           <View
             style={{
               position: 'absolute',
@@ -151,6 +149,17 @@ const MyProfile = props => {
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
             />
           )}
+          {userData?.profileImage ? (
+            <View style={styles.heroAvatarWrap} accessibilityLabel="Profile photo">
+              <Image
+                source={
+                  helper.getMediaSourceOrUri(userData.profileImage) ?? IMAGES.men
+                }
+                style={styles.heroAvatarImg}
+                resizeMode="cover"
+              />
+            </View>
+          ) : null}
           <View style={styles.notchView} />
         </View>
 
@@ -392,6 +401,23 @@ const MyProfile = props => {
 export default MyProfile;
 
 const styles = StyleSheet.create({
+  heroAvatarWrap: {
+    position: 'absolute',
+    zIndex: 2,
+    left: 18,
+    bottom: 28,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3,
+    borderColor: '#fff',
+    overflow: 'hidden',
+    backgroundColor: '#E8E8E8',
+  },
+  heroAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
   profileContent: {
     minHeight: heightPercentageToDP(50),
     backgroundColor: '#fff',

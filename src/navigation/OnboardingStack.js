@@ -9,6 +9,7 @@ import OnBoard2 from '../screens/Onboarding/OnBoard2';
 import OnBoard3 from '../screens/Onboarding/OnBoard3';
 import OnBoard4 from '../screens/Onboarding/OnBoard4';
 import UploadProfileVid from '../screens/Onboarding/UploadProfileVid';
+import Subscription from '../screens/App/Subscription';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -24,6 +25,11 @@ const OnBoardStack = () => {
       <Stack.Screen name="OnBoard3" component={OnBoard3} />
       <Stack.Screen name="OnBoard4" component={OnBoard4} />
       <Stack.Screen name="GestureGuide" component={GestureGuide} />
+      <Stack.Screen
+        name="PostOnboardingSubscription"
+        component={Subscription}
+        initialParams={{ fromOnboarding: true }}
+      />
     </Stack.Navigator>
   );
 };

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import RnRangeSlider from 'rn-range-slider';
 import PrimaryButton from '../../../components/Buttons/PrimaryButton';
 import { SelectPicker } from '../../../components/SelectPicket';
@@ -18,6 +18,7 @@ import globalActions from '../../../redux/actions/globalActions';
 import { setDashLoader } from '../../../redux/globalSlice';
 import helper from '../../../utils/helper';
 import Header from './Header';
+import { hasAdvancedFilters } from '../../../constants/subscriptionEntitlements';
 import Label from './slider/Label';
 import Notch from './slider/Notch';
 import Rail from './slider/Rail';
@@ -30,6 +31,8 @@ const Filter = props => {
   const [filter, setFilter] = useState(null);
   const [open, setOpen] = useState(null);
   const dispatch = useDispatch();
+  const { userData } = useSelector((s) => s.user);
+  const showAdvanced = hasAdvancedFilters(userData);
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -68,6 +71,7 @@ const Filter = props => {
             })
           }
         }} />
+        {showAdvanced ? (
         <RangeSliderInput val={filter?.minFollowers ? filter?.minFollowers : 0} valH={filter?.maxFollowers ? filter?.maxFollowers : 10000000} label={'Followers Range'} max={10000000} handleValueChange={(low, high, byUser) => {
           if (byUser) {
             setFilter({
@@ -77,6 +81,11 @@ const Filter = props => {
             })
           }
         }} />
+        ) : (
+          <Text style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>
+            Follower filters unlock on Collab Pro and above.
+          </Text>
+        )}
 
 
         {/* <SelectPicker

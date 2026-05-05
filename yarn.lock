@@ -2305,7 +2305,7 @@
 
 "@react-native-community/netinfo@^12.0.1":
   version "12.0.1"
-  resolved "https://registry.yarnpkg.com/@react-native-community/netinfo/-/netinfo-12.0.1.tgz#fec75f4093c27778479d8927b4f51f133b8a13a4"
+  resolved "https://registry.npmjs.org/@react-native-community/netinfo/-/netinfo-12.0.1.tgz"
   integrity sha512-P/3caXIvfYSJG8AWJVefukg+ZGRPs+M4Lp3pNJtgcTYoJxCjWrKQGNnCkj/Cz//zWa/avGed0i/wzm0T8vV2IQ==
 
 "@react-native-firebase/app@^23.8.4":
@@ -7765,6 +7765,11 @@ react-native-google-places-autocomplete@^2.6.4:
     qs "^6.14.1"
     react-native-uuid "^2.0.3"
 
+react-native-iap@^14.4.36:
+  version "14.7.20"
+  resolved "https://registry.npmjs.org/react-native-iap/-/react-native-iap-14.7.20.tgz"
+  integrity sha512-Qj32bpX3Jl1GsLCbnFCBxbDObgUq4dZtt0Eq++g0G1IZw9519uSSq9VpbscFPGL+2T19Q3BEq7uWIzgR2T7EVA==
+
 react-native-image-crop-picker@^0.51.1:
   version "0.51.1"
   resolved "https://registry.npmjs.org/react-native-image-crop-picker/-/react-native-image-crop-picker-0.51.1.tgz"
@@ -7801,6 +7806,11 @@ react-native-mask-input@^1.2.3:
   version "1.2.3"
   resolved "https://registry.npmjs.org/react-native-mask-input/-/react-native-mask-input-1.2.3.tgz"
   integrity sha512-RWx+gc1EaBslJWR6dsvGdILJ5XvnvZuyEsgJaH9uAMukB3Z9eOlxra1E7Ovck8NSMVcYWpBB/lzojO4LwqqXgA==
+
+react-native-nitro-modules@^0.35.6:
+  version "0.35.6"
+  resolved "https://registry.npmjs.org/react-native-nitro-modules/-/react-native-nitro-modules-0.35.6.tgz"
+  integrity sha512-3Cb7s+O5tpZ6RdIiPOB/wi3IMfBxD6tl6VDF8gJ5zvM/BEGTWxwMMLjzmWmsYPKekdbYBznF6qp2d2SxixPy8g==
 
 react-native-picker-select@^9.3.1:
   version "9.3.1"

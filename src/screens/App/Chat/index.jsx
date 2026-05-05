@@ -21,6 +21,7 @@ import { IMAGES } from "../../../constants/images";
 import Actions from "../../../redux/actions/globalActions";
 import chatSocket from "../../../utils/chatSocket";
 import helper from "../../../utils/helper";
+import { canSeeWhoLiked } from "../../../constants/subscriptionEntitlements";
 import Header from "./Header";
 
 /** Shape expected by `Messages` — use when navigating: `navigation.navigate('Messages', { item: DUMMY_MESSAGES_CHAT_ITEM })` */
@@ -150,6 +151,7 @@ const Chat = (props) => {
             style={{ marginHorizontal: 10, marginTop: 10 }}
             contentContainerStyle={{ gap: 10 }}
             renderItem={({ item }) => {
+              const blurLikes = !canSeeWhoLiked(userData);
               return (
                 <TouchableOpacity onPress={() => props.navigation.navigate('UserProfile', { userID: item?._id })} style={{ width: widthPercentageToDP(25), height: widthPercentageToDP(30), marginBottom: 12 }}>
                   <ImageBackground style={{ flex: 1, overflow: "hidden", alignItems: 'center', justifyContent: "center" }} resizeMode="stretch" source={require("../../../assets/images/likeBorder.png")}>
@@ -163,6 +165,7 @@ const Chat = (props) => {
                         resizeMode="cover"
                         style={{ width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}
                       />
+                      {blurLikes ? (
                       <BlurView
                         style={{ ...StyleSheet.absoluteFill }}
                         blurType="light"
@@ -170,6 +173,7 @@ const Chat = (props) => {
                         blurRadius={20}
                         reducedTransparencyFallbackColor="black"
                       />
+                      ) : null}
                     </View>
                   </ImageBackground>
                   <Image style={{ width: 35, height: 35, position: "absolute", bottom: -12, alignSelf: 'center', }} resizeMode="contain" source={require("../../../assets/images/likebtn.png")} />
@@ -219,17 +223,34 @@ const Chat = (props) => {
 };
 
 const ListItem = ({ item, index, navigation, userData }) => {
+  const peer = item.usersData?.[0];
+  const [rowAvatarFail, setRowAvatarFail] = useState(false);
+  useEffect(() => {
+    setRowAvatarFail(false);
+  }, [
+    item?._id,
+    peer?._id,
+    peer?.profileImage,
+    peer?.profileVideoThumbnail,
+    peer?.profileVideo,
+  ]);
+  const rowAvatar =
+    peer &&
+    helper.getMediaSource(
+      peer.profileVideoThumbnail || peer.profileImage || peer.profileVideo,
+    );
   const unread = unreadCountForUser(item, userData?._id);
   const listTime =
     item?.latestMessageTime ||
     item?.updatedAt ||
     item?.createdAt;
-  const peer = item?.usersData?.[0];
-  const avatarSource =
-    helper.getMediaSourceOrUri(peer?.profileImage || peer?.profileVideoThumbnail) ?? IMAGES.men;
   return (
     <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item })}>
-      <Image source={avatarSource} style={styles.itemImage} />
+      <Image
+        source={rowAvatar && !rowAvatarFail ? rowAvatar : IMAGES.men}
+        onError={() => setRowAvatarFail(true)}
+        style={styles.itemImage}
+      />
       <View style={styles.itemContent}>
         <View style={{ flex: 1 }}>
           <Typography children={item.usersData.length > 0 ? item.usersData[0].firstName + " " + item.usersData[0].lastName : "No name available"} size={15} />

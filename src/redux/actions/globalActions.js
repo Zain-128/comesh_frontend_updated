@@ -2,6 +2,7 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import Toast from "react-native-toast-message";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
+import { compressImageForUpload, compressVideoForUpload } from "../../utils/compressMedia";
 
 const DashboardListing = createAsyncThunk(
   "general/Dashboard",
@@ -118,11 +119,15 @@ const SuperLikeUser = createAsyncThunk(
       return { userId: data.userId, ...result.data };
     } catch (error) {
       let eRes = error?.response?.data;
+      const msg =
+        typeof eRes?.message === "string"
+          ? eRes.message
+          : eRes?.message?.message || eRes?.error || error.message;
       if (eRes) {
         Toast.show({
           type: "error",
-          text1: eRes.error,
-          text2: eRes.message,
+          text1: "Super like",
+          text2: msg,
         });
       } else {
         Toast.show({
@@ -144,11 +149,15 @@ const likeUser = createAsyncThunk("general/likeUser", async (data, thunkAPI) => 
     return { userId: data.userId, ...result.data };
   } catch (error) {
     let eRes = error?.response?.data;
+    const msg =
+      typeof eRes?.message === "string"
+        ? eRes.message
+        : eRes?.message?.message || eRes?.error || error.message;
     if (eRes) {
       Toast.show({
         type: "error",
-        text1: eRes.error,
-        text2: eRes.message,
+        text1: "Limit",
+        text2: msg,
       });
     } else {
       Toast.show({
@@ -409,13 +418,16 @@ const SendMessage = createAsyncThunk(
       if (data.replyToMessageId) {
         formData.append("replyToMessageId", String(data.replyToMessageId));
       }
-      const uri = data.media.uri;
+      const originalUri = data.media.uri;
       const mime = data.media.type || "image/jpeg";
+      const uri = mime.startsWith("video")
+        ? await compressVideoForUpload(originalUri)
+        : await compressImageForUpload(originalUri);
       let baseName =
         data.media.fileName ||
         data.media.name ||
-        (typeof uri === "string" && uri.includes("/")
-          ? decodeURIComponent(uri.split("/").pop() || "").split("?")[0]
+        (typeof originalUri === "string" && originalUri.includes("/")
+          ? decodeURIComponent(originalUri.split("/").pop() || "").split("?")[0]
           : "") ||
         (mime.startsWith("video") ? "upload.mp4" : "upload.jpg");
       if (!/\.[a-z0-9]{2,4}$/i.test(baseName)) {
@@ -605,11 +617,15 @@ const getLikesUsers = createAsyncThunk(
     } catch (error) {
       console.warn(error);
       let eRes = error?.response?.data;
+      const msg =
+        typeof eRes?.message === "string"
+          ? eRes.message
+          : eRes?.message?.message || eRes?.error || error.message;
       if (eRes) {
         Toast.show({
           type: "error",
-          text1: eRes.error,
-          text2: eRes.message,
+          text1: "Likes",
+          text2: msg,
         });
       } else {
         Toast.show({
@@ -618,6 +634,7 @@ const getLikesUsers = createAsyncThunk(
           text2: error.message,
         });
       }
+      callback?.({ success: false, data: null });
     }
   }
 );

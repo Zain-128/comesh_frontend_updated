@@ -11,7 +11,11 @@ const SimpleHeader = (props: any) => {
       {backBtn && <View style={{ flexDirection: 'row', gap: 5 }}>
         <TouchableOpacity
           activeOpacity={1}
-          onPress={() => props.navigation.goBack()}>
+          onPress={() =>
+            typeof props.onHeaderBack === 'function'
+              ? props.onHeaderBack()
+              : props.navigation.goBack()
+          }>
           <Image
             source={IMAGES.backBtnDark}
             style={{

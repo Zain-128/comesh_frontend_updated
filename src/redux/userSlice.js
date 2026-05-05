@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import Toast from "react-native-toast-message";
 import userActions from "./actions/userActions";
+import globalActions from "./actions/globalActions";
 
 const userSlice = createSlice({
   name: "user",
@@ -88,6 +89,16 @@ const userSlice = createSlice({
         state.userData = action.payload.data;
       }
     });
+    builder.addCase(globalActions.likeUser.fulfilled, (state, action) => {
+      if (action.payload?.success && action.payload?.data) {
+        state.userData = { ...state.userData, ...action.payload.data };
+      }
+    });
+    builder.addCase(userActions.VerifyIosSubscription.fulfilled, (state, action) => {
+      if (action.payload?.success && action.payload?.data) {
+        state.userData = { ...state.userData, ...action.payload.data };
+      }
+    });
     builder.addCase(userActions.VerifyOtp.fulfilled, (state, action) => {
       if (action.payload) {
         if (action.payload.success) {
@@ -135,6 +146,12 @@ const userSlice = createSlice({
         type: "error",
         text2: action.error.message,
       });
+    });
+    builder.addCase(userActions.UploadVideo.fulfilled, (state, action) => {
+      const p = action.payload;
+      if (p?.success && p?.data) {
+        state.userData = { ...state.userData, ...p.data };
+      }
     });
     builder.addCase(userActions.UploadProfileMedia.fulfilled, (state, action) => {
       if (action.payload) {

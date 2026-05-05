@@ -37,5 +37,11 @@ export default endPoints = {
   GetAllLikesUsers: "/users/getAllUsersWhoLikedMe",
   /** GET ?page=&limit=&search= — find users (auth) */
   SearchUsersList: "/users/list",
-  RatingAndFeedback: "/rating-and-feedback"
+  RatingAndFeedback: "/rating-and-feedback",
+  /** GET — rollout-driven visible paid tiers for paywall */
+  SubscriptionPaywall: "/users/subscription/paywall",
+  /** GET — Creator Elite stub analytics */
+  SubscriptionAnalytics: "/users/subscription/analytics",
+  /** POST JSON — auth; body: { receiptData } or dev { productId } when server IAP_SKIP_VERIFICATION */
+  VerifyIosSubscription: "/users/subscriptions/verify-ios",
 };

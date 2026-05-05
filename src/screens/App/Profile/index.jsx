@@ -24,6 +24,12 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import colors from '../../../constants/colors';
 import { IMAGES } from '../../../constants/images';
 import globalActions from '../../../redux/actions/globalActions';
+import {
+  effectiveTier,
+  swipeLimitReached,
+  swipesRemainingLabel,
+  TIERS,
+} from '../../../constants/subscriptionEntitlements';
 import { setLoader } from '../../../redux/globalSlice';
 import { updateUserLikes } from '../../../redux/userSlice';
 import helper from '../../../utils/helper';
@@ -74,6 +80,14 @@ const Profile = props => {
     "Comesh User";
 
   const Like = async (userId) => {
+    if (swipeLimitReached(userData)) {
+      Toast.show({
+        type: "info",
+        text1: "Daily limit",
+        text2: `${swipesRemainingLabel(userData)}. Upgrade to Collab Pro for unlimited swipes.`,
+      });
+      return;
+    }
     //dispatch(setLoader(true))
     await dispatch(globalActions.likeUser({
       userId,
@@ -106,6 +120,14 @@ const Profile = props => {
   }
 
   const SuperLike = async (userId) => {
+    if (effectiveTier(userData) === TIERS.CREATOR_ACCESS) {
+      Toast.show({
+        type: 'info',
+        text1: 'Collab Pro',
+        text2: 'Super like is available on Collab Pro and above.',
+      });
+      return;
+    }
     //dispatch(setLoader(true))
     await dispatch(globalActions.SuperLikeUser({
       userId,
@@ -182,7 +204,7 @@ const Profile = props => {
   return (
     <AppContainer>
       <ScrollView style={{ flex: 1 }}>
-        <View style={{ height: heightPercentageToDP(50), overflow: 'hidden', }}>
+        <View style={{ height: heightPercentageToDP(50), overflow: 'hidden', position: 'relative' }}>
           <TouchableOpacity
             style={{ position: 'absolute', zIndex: 1, margin: 20 }}
             onPress={() => props.navigation.goBack()}>
@@ -218,6 +240,18 @@ const Profile = props => {
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
             />
           )}
+          {othersProfile?.profileImage ? (
+            <View style={styles.heroAvatarWrap} accessibilityLabel="Profile photo">
+              <Image
+                source={
+                  helper.getMediaSourceOrUri(othersProfile.profileImage) ??
+                  IMAGES.men
+                }
+                style={styles.heroAvatarImg}
+                resizeMode="cover"
+              />
+            </View>
+          ) : null}
           <View style={styles.notchView} />
           <View style={styles.actionView}>
             <TouchableOpacity
@@ -520,6 +554,23 @@ const Profile = props => {
 export default Profile;
 
 const styles = StyleSheet.create({
+  heroAvatarWrap: {
+    position: 'absolute',
+    zIndex: 3,
+    left: 18,
+    bottom: 88,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3,
+    borderColor: '#fff',
+    overflow: 'hidden',
+    backgroundColor: '#E8E8E8',
+  },
+  heroAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
   profileContent: {
     minHeight: heightPercentageToDP(50),
     backgroundColor: '#fff',

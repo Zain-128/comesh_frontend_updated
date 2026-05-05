@@ -50,6 +50,17 @@ function profileUploadUrl() {
   return `${base}${path}`;
 }
 
+/** Dev logs: last path segment only, no query tokens. */
+function uploadAssetLabel(uri) {
+  if (!uri) return null;
+  try {
+    const tail = decodeURIComponent(String(uri)).split("/").pop() || "?";
+    return tail.length > 96 ? `${tail.slice(0, 96)}…` : tail;
+  } catch {
+    return "?";
+  }
+}
+
 /** GET `/users/by-id/:id` — fresh profile for My Profile screen. */
 const GetMyProfile = createAsyncThunk(
   "user/GetMyProfile",
@@ -195,11 +206,27 @@ const UpdateProfile = createAsyncThunk(
 );
 
 const UploadVideo = createAsyncThunk(
-  "auth/updateProfile",
+  "user/uploadProfileVideo",
   async (data, thunkAPI) => {
+    const uploadTag = "[uploadProfileVideo]";
     try {
+      console.log(`${uploadTag} start`, {
+        hasAvatar: Boolean(data.profileImage?.uri),
+        hasVideo: Boolean(data.video?.uri),
+        videoName: data.video?.name,
+        videoType: data.video?.type,
+        url: profileUploadUrl(),
+      });
+
+      console.log(`${uploadTag} compressing video…`, {
+        in: uploadAssetLabel(data.video.uri),
+      });
       const compressedUri = await compressVideoForUpload(data.video.uri);
       const uri = compressedUri || data.video.uri;
+      console.log(`${uploadTag} video ready`, {
+        usedCompressor: Boolean(compressedUri),
+        out: uploadAssetLabel(uri),
+      });
       const baseName =
         (uri && String(uri).split("/").pop()) || data.video.name || "profile.mp4";
       const filename = baseName.toLowerCase().endsWith(".mp4")
@@ -212,20 +239,28 @@ const UploadVideo = createAsyncThunk(
       const parts = [];
 
       if (data.profileImage?.uri) {
+        console.log(`${uploadTag} compressing profile image…`, {
+          in: uploadAssetLabel(data.profileImage.uri),
+          type: data.profileImage.type,
+        });
         const imgCompressed = await compressImageForUpload(data.profileImage.uri);
         const imgUri = imgCompressed || data.profileImage.uri;
+        console.log(`${uploadTag} profile image ready`, {
+          usedCompressor: Boolean(imgCompressed),
+          out: uploadAssetLabel(imgUri),
+        });
         const rawName =
           (imgUri && String(imgUri).split("/").pop()) ||
           data.profileImage.name ||
           data.profileImage.fileName ||
           "avatar.jpg";
-        const imgFilename = /\.(jpe?g|png|gif|webp)$/i.test(rawName)
-          ? rawName
-          : `${rawName.replace(/\.[^/.]+$/, "") || "avatar"}.jpg`;
+        /** Always .jpg + image/jpeg so multer/sharp on Linux (Render) never see non-standard `image/jpg`. */
+        const baseStem = String(rawName).replace(/\.[^/.]+$/, "") || "avatar";
+        const imgFilename = `${baseStem}.jpg`;
         parts.push({
           name: "profileImage",
           filename: imgFilename,
-          type: data.profileImage.type || "image/jpeg",
+          type: "image/jpeg",
           data: wrapLocalFile(imgUri),
         });
       }
@@ -237,6 +272,16 @@ const UploadVideo = createAsyncThunk(
         data: wrapLocalFile(uri),
       });
 
+      console.log(`${uploadTag} multipart parts`, {
+        count: parts.length,
+        parts: parts.map((p) => ({
+          name: p.name,
+          filename: p.filename,
+          type: p.type,
+        })),
+      });
+
+      let lastProgressBucket = -1;
       let resp = await RNFetchBlob.fetch(
         "PUT",
         profileUploadUrl(),
@@ -247,9 +292,22 @@ const UploadVideo = createAsyncThunk(
         parts
       ).uploadProgress((sent, total) => {
         data.onProgress({ sent, total });
+        if (total > 0) {
+          const pct = Math.floor((sent / total) * 100);
+          const bucket = Math.min(10, Math.floor(pct / 10));
+          if (bucket !== lastProgressBucket) {
+            lastProgressBucket = bucket;
+            console.log(`${uploadTag} upload ${pct}% (${sent}/${total} bytes)`);
+          }
+        }
       });
       const status = getFetchBlobHttpStatus(resp);
       const parsed = parseUploadJsonBody(resp.data);
+      console.log(`${uploadTag} response`, {
+        httpStatus: status,
+        success: parsed?.success,
+        message: parsed?.message,
+      });
       if (status >= 400) {
         const merged = {
           success: false,
@@ -262,13 +320,13 @@ const UploadVideo = createAsyncThunk(
           text1: "Upload failed",
           text2: merged.message,
         });
-        return {};
+        return merged;
       }
       data.callback(parsed);
-      if (data?.redirect) return parsed;
-      return {};
+      console.log(`${uploadTag} finished OK (server success)`);
+      return parsed;
     } catch (error) {
-      console.warn("rerere", error);
+      console.warn(`${uploadTag} error`, error?.message || error);
       let eRes = error?.response?.data;
       if (eRes) {
         Toast.show({
@@ -283,6 +341,7 @@ const UploadVideo = createAsyncThunk(
           text2: error.message,
         });
       }
+      return { success: false, message: error?.message || "Upload failed" };
     }
   }
 );
@@ -387,6 +446,32 @@ const UploadProfileMedia = createAsyncThunk(
   }
 );
 
+/** POST receipt or (dev) productId — refreshes subscription on user after Apple verify. */
+const VerifyIosSubscription = createAsyncThunk(
+  "user/VerifyIosSubscription",
+  async (payload, thunkAPI) => {
+    try {
+      const result = await apiRequest.post(endPoints.VerifyIosSubscription, {
+        receiptData: payload?.receiptData,
+        productId: payload?.productId,
+      });
+      return result.data;
+    } catch (error) {
+      const eRes = error?.response?.data;
+      const msg =
+        typeof eRes?.message === "string"
+          ? eRes.message
+          : eRes?.message?.message || eRes?.error || error.message;
+      Toast.show({
+        type: "error",
+        text1: "Subscription",
+        text2: msg,
+      });
+      return thunkAPI.rejectWithValue({ message: msg });
+    }
+  }
+);
+
 export default {
   SignIn,
   SignOut,
@@ -395,4 +480,5 @@ export default {
   UpdateProfile,
   UploadVideo,
   UploadProfileMedia,
+  VerifyIosSubscription,
 };

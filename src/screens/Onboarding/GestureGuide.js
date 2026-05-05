@@ -1,17 +1,19 @@
 import LottieView from 'lottie-react-native';
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { FlatList, TouchableOpacity, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { heightPercentageToDP, widthPercentageToDP } from 'react-native-responsive-screen';
-import { useDispatch, useSelector } from 'react-redux';
 import images from '../../assets/images';
 import Text from '../../components/Text';
 import colors from '../../constants/colors';
-import { setFirstTime } from '../../redux/userSlice';
 
-const GestureGuide = props => {
-  const userProfile = useSelector(state => state.user.userData);
-  const dispatch = useDispatch();
+const GestureGuide = () => {
+  const navigation = useNavigation();
+
+  const onLeaveTutorial = () => {
+    navigation.navigate('PostOnboardingSubscription');
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -72,7 +74,7 @@ const GestureGuide = props => {
                     />
                   </View>
                   <TouchableOpacity
-                    onPress={() => dispatch(setFirstTime(false))}
+                    onPress={onLeaveTutorial}
                     style={{
                       backgroundColor: 'rgba(255,255,255,0.3)',
                       borderWidth: 2,
@@ -85,7 +87,7 @@ const GestureGuide = props => {
                     }}>
                     <Text
                       style={{ fontSize: 16, color: '#fff', fontWeight: '500' }}>
-                      Skip Tutorial
+                      Continue
                     </Text>
                   </TouchableOpacity>
                 </View>
