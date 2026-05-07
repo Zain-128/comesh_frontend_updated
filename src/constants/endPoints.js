@@ -15,6 +15,7 @@ export default endPoints = {
   Logout: `/users/logout`,
   VerfiyOTP: '/users/verifyUser',
   UpdateProfile: `/users/updateProfile`,
+  UpdateNotifications: `/users/updateNotifications`,
   /** Leading `/` required — else baseUrl `.../api` + `users/...` becomes `.../apiusers/...`. */
   Dashboard: "/users/dashboardListing",
   OthersProfile: "/users/othersProfile/",

@@ -15,6 +15,7 @@ export const IMAGES = {
   arrowLeft: require('../assets/images/arrow-left.png'),
 
   men: require('../assets/dummy/men.jpg'),
+  women: require('../assets/dummy/women.jpg'),
 
   sendIcon: require('../assets/images/sendIcon.png'),
   editIcon: require('../assets/images/editIcon.png'),

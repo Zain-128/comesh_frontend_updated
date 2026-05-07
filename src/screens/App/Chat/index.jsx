@@ -152,6 +152,8 @@ const Chat = (props) => {
             contentContainerStyle={{ gap: 10 }}
             renderItem={({ item }) => {
               const blurLikes = !canSeeWhoLiked(userData);
+              const isFemale = item?.gender?.toLowerCase() === 'female';
+              const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
               return (
                 <TouchableOpacity onPress={() => props.navigation.navigate('UserProfile', { userID: item?._id })} style={{ width: widthPercentageToDP(25), height: widthPercentageToDP(30), marginBottom: 12 }}>
                   <ImageBackground style={{ flex: 1, overflow: "hidden", alignItems: 'center', justifyContent: "center" }} resizeMode="stretch" source={require("../../../assets/images/likeBorder.png")}>
@@ -160,7 +162,7 @@ const Chat = (props) => {
                         source={
                           helper.getMediaSource(
                             item?.profileVideoThumbnail || item?.profileImage || item?.profileVideo
-                          ) || IMAGES.men
+                          ) || fallbackAvatar
                         }
                         resizeMode="cover"
                         style={{ width: widthPercentageToDP(23.3), height: widthPercentageToDP(28.5) }}
@@ -239,6 +241,10 @@ const ListItem = ({ item, index, navigation, userData }) => {
     helper.getMediaSource(
       peer.profileVideoThumbnail || peer.profileImage || peer.profileVideo,
     );
+  
+  const isFemale = peer?.gender?.toLowerCase() === 'female';
+  const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
+
   const unread = unreadCountForUser(item, userData?._id);
   const listTime =
     item?.latestMessageTime ||
@@ -247,7 +253,7 @@ const ListItem = ({ item, index, navigation, userData }) => {
   return (
     <TouchableOpacity style={styles.itemView} onPress={() => navigation.navigate('Messages', { item })}>
       <Image
-        source={rowAvatar && !rowAvatarFail ? rowAvatar : IMAGES.men}
+        source={rowAvatar && !rowAvatarFail ? rowAvatar : fallbackAvatar}
         onError={() => setRowAvatarFail(true)}
         style={styles.itemImage}
       />

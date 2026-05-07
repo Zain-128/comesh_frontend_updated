@@ -143,7 +143,7 @@ const MyProfile = props => {
             <Image
               source={
                 helper.getMediaSourceOrUri(userData?.profileImage || userData?.profileVideoThumbnail) ??
-                IMAGES.men
+                (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -153,7 +153,7 @@ const MyProfile = props => {
             <View style={styles.heroAvatarWrap} accessibilityLabel="Profile photo">
               <Image
                 source={
-                  helper.getMediaSourceOrUri(userData.profileImage) ?? IMAGES.men
+                  helper.getMediaSourceOrUri(userData.profileImage) ?? (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
                 }
                 style={styles.heroAvatarImg}
                 resizeMode="cover"

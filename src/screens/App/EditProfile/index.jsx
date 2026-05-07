@@ -308,7 +308,7 @@ const EditProfile = props => {
       <ScrollView style={{ flex: 1 }}>
         <Header {...props} />
         <TouchableOpacity onPress={() => SelectProfileVideo()} style={{ height: heightPercentageToDP(40) }}>
-          <Video paused={false} source={profile_pic?.uri ? { uri: profile_pic?.uri } : IMAGES.men} resizeMode={'cover'} style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }} />
+          <Video paused={false} source={profile_pic?.uri ? { uri: profile_pic?.uri } : (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)} resizeMode={'cover'} style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }} />
           <View style={styles.notchView} />
           <TouchableOpacity
             activeOpacity={1}

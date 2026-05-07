@@ -234,7 +234,7 @@ const Profile = props => {
             <Image
               source={
                 helper.getMediaSourceOrUri(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail) ??
-                IMAGES.men
+                (othersProfile?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -245,7 +245,7 @@ const Profile = props => {
               <Image
                 source={
                   helper.getMediaSourceOrUri(othersProfile.profileImage) ??
-                  IMAGES.men
+                  (othersProfile?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
                 }
                 style={styles.heroAvatarImg}
                 resizeMode="cover"

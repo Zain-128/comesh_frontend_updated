@@ -499,7 +499,7 @@ const Messages = (props) => {
           source={
             helper.getMediaSourceOrUri(
               otherUser?.profileImage || otherUser?.profileVideoThumbnail
-            ) ?? IMAGES.men
+            ) ?? (otherUser?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
           }
           style={styles.headerAvatar}
         />

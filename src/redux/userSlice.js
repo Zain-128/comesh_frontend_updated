@@ -147,6 +147,13 @@ const userSlice = createSlice({
         text2: action.error.message,
       });
     });
+    builder.addCase(userActions.UpdateNotifications.fulfilled, (state, action) => {
+      if (action.payload) {
+        if (action.payload.success) {
+          state.userData = action.payload.data;
+        }
+      }
+    });
     builder.addCase(userActions.UploadVideo.fulfilled, (state, action) => {
       const p = action.payload;
       if (p?.success && p?.data) {

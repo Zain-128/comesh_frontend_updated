@@ -27,12 +27,14 @@ function UserSearchRow({ item, onPress }) {
   const name = [item.firstName, item.lastName].filter(Boolean).join(" ").trim() || "User";
   const thumbSrc = helper.getMediaSource(item.profileVideoThumbnail || item.profileImage || item.profileVideo);
   const showUri = thumbSrc && !imgFail;
+  const isFemale = item?.gender?.toLowerCase() === 'female';
+  const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
 
   return (
     <View style={styles.row}>
       <TouchableOpacity style={styles.rowMain} activeOpacity={0.85} onPress={onPress}>
         <Image
-          source={showUri ? thumbSrc : IMAGES.men}
+          source={showUri ? thumbSrc : fallbackAvatar}
           style={styles.avatar}
           onError={() => setImgFail(true)}
         />
@@ -73,7 +75,11 @@ const SearchUsers = () => {
         return;
       }
       const payload = body.data || {};
-      const rows = payload.data || [];
+      let rows = payload.data || [];
+      
+      // Filter out users whose email contains @comesh.phone
+      rows = rows.filter(u => !u?.email?.toLowerCase().includes('@comesh.phone'));
+      
       const t = Number(payload.total) || 0;
       setTotal(t);
       setPage(pageNum);

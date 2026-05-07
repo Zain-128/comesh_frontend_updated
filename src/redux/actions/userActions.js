@@ -205,6 +205,34 @@ const UpdateProfile = createAsyncThunk(
   }
 );
 
+const UpdateNotifications = createAsyncThunk(
+  "user/updateNotifications",
+  async (data, thunkAPI) => {
+    try {
+      let { callback, ...params } = data;
+      let result = await apiRequest.put(endPoints.UpdateNotifications, params);
+      callback(result.data);
+      return result.data;
+    } catch (error) {
+      let eRes = error?.response?.data;
+      if (eRes) {
+        Toast.show({
+          type: "error",
+          text1: eRes.error,
+          text2: eRes.message,
+        });
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: error.message,
+        });
+      }
+      callback({ success: false });
+    }
+  }
+);
+
 const UploadVideo = createAsyncThunk(
   "user/uploadProfileVideo",
   async (data, thunkAPI) => {
@@ -478,6 +506,7 @@ export default {
   GetMyProfile,
   VerifyOtp,
   UpdateProfile,
+  UpdateNotifications,
   UploadVideo,
   UploadProfileMedia,
   VerifyIosSubscription,

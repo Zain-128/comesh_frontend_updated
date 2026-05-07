@@ -20,6 +20,7 @@ import { ContentType } from '../../../constants/endPoints';
 import { fontsFamily, fontsSize } from '../../../constants/fonts';
 import { logoutUser } from '../../../redux/userSlice';
 import chatSocket from '../../../utils/chatSocket';
+import userActions from '../../../redux/actions/userActions';
 import Header from './Header';
 
 const Settings = props => {
@@ -28,8 +29,10 @@ const Settings = props => {
   }, []);
 
   const dispatch = useDispatch();
+  const { userData } = useSelector(state => state.user);
+  
   const [loggingOut, setLoggingOut] = useState(false);
-  const [notifications, setNotifications] = useState(false);
+  const [notifications, setNotifications] = useState(userData?.pushNotificationEnabled ?? true);
   const [mode, setMode] = useState(false);
 
 
@@ -64,7 +67,17 @@ const Settings = props => {
               <Typography children={"Notifications"} textType='semiBold' />
               <Switch
                 value={notifications}
-                onValueChange={(val) => setNotifications(val)}
+                onValueChange={(val) => {
+                  setNotifications(val);
+                  dispatch(userActions.UpdateNotifications({
+                    pushNotificationEnabled: val,
+                    callback: (data) => {
+                      if (!data.success) {
+                        setNotifications(!val);
+                      }
+                    }
+                  }));
+                }}
                 disabled={false}
                 activeText={'On'}
                 inActiveText={'Off'}
