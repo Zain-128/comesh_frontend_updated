@@ -1,5 +1,5 @@
 import Geolocation from "@react-native-community/geolocation";
-import messaging from "@react-native-firebase/messaging";
+import { getFcmRegistrationToken } from "../../push/fcmToken";
 import { CommonActions } from "@react-navigation/native";
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -104,7 +104,7 @@ const OnBoard4 = (props) => {
   const CreateAccount = async (location = null) => {
     dispatch(setLoader(true))
     try {
-      let token = await messaging().getToken();
+      let token = await getFcmRegistrationToken();
       const hasAvailability =
         !!String(Day || "").trim() &&
         !!String(From || "").trim() &&
@@ -164,7 +164,7 @@ const OnBoard4 = (props) => {
   const CreateAccountSkip = async () => {
     dispatch(setLoader(true))
     try {
-      let token = await messaging().getToken();
+      let token = await getFcmRegistrationToken();
 
 
       await dispatch(userActions.UpdateProfile({

@@ -14,7 +14,6 @@ import PrimaryButton from '../../../components/Buttons/PrimaryButton';
 import RadioButton from '../../../components/RadioButton';
 import { Typography } from '../../../components/Typography';
 import { AppContainer } from '../../../components/layouts/AppContainer';
-import { fontsFamily } from '../../../constants/fonts';
 import globalActions from '../../../redux/actions/globalActions';
 import { setLoader } from '../../../redux/globalSlice';
 import { logoutUser } from '../../../redux/userSlice';
@@ -118,7 +117,6 @@ We're always looking to improve and welcome your honest feedback`}
               style={{
                 height: 100,
                 padding: 10,
-                fontFamily: fontsFamily.regular,
                 marginVertical: 20,
                 borderWidth: 1,
                 borderColor: '#E8E8E8',

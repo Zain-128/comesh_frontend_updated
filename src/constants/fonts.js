@@ -1,28 +1,35 @@
-import {RFPercentage} from 'react-native-responsive-fontsize';
+import { Platform } from 'react-native';
 
+/**
+ * System UI stack (no bundled .ttf) — Inter was listed in Info.plist but not in the app bundle, which caused iOS font errors.
+ * Use `fontWeight` where you need weight (see Typography, PrimaryButton).
+ */
 export const fontsFamily = {
-  thin: 'Inter-Thin',
-  light: 'Inter-Light',
-  extraLight: 'Inter-ExtraLight',
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semibold: 'Inter-SemiBold',
-  bold: 'Inter-Bold',
-  extrabold: 'Inter-ExtraBold',
-  black: 'Inter-Black',
+  thin: Platform.select({ ios: 'System', android: 'sans-serif-thin', default: 'System' }),
+  light: Platform.select({ ios: 'System', android: 'sans-serif-light', default: 'System' }),
+  extraLight: Platform.select({ ios: 'System', android: 'sans-serif-light', default: 'System' }),
+  regular: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
+  medium: Platform.select({ ios: 'System', android: 'sans-serif-medium', default: 'System' }),
+  semibold: Platform.select({ ios: 'System', android: 'sans-serif-medium', default: 'System' }),
+  bold: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
+  extrabold: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
+  black: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
 };
 
+/**
+ * Fixed scale — avoids calling RFPercentage at module load (accesses native Dimensions before JS runtime is ready on some builds).
+ */
 export const fontsSize = {
-  xxs: RFPercentage(0.8),
-  xs: RFPercentage(1),
-  sm1: RFPercentage(1.25),
-  sm2: RFPercentage(1.5),
-  md1: RFPercentage(1.7),
-  md2: RFPercentage(2),
-  lg1: RFPercentage(2.25),
-  lg2: RFPercentage(2.5),
-  xl1: RFPercentage(2.7),
-  xl2: RFPercentage(3),
-  xxl1: RFPercentage(3.25),
-  xxl2: RFPercentage(3.5),
+  xxs: 10,
+  xs: 11,
+  sm1: 12,
+  sm2: 13,
+  md1: 14,
+  md2: 16,
+  lg1: 17,
+  lg2: 18,
+  xl1: 19,
+  xl2: 20,
+  xxl1: 21,
+  xxl2: 22,
 };

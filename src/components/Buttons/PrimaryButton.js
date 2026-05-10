@@ -8,7 +8,7 @@ import {
 
 // local import
 import colors from '../../constants/colors';
-import { fontsFamily, fontsSize } from '../../constants/fonts';
+import { fontsSize } from '../../constants/fonts';
 
 const PrimaryButton = ({ text, onPress, disabled = false, ...props }) => {
   return (
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: fontsSize.lg1,
-    fontFamily: fontsFamily.semibold,
+    fontWeight: '600',
     color: colors.onPrimary,
   },
 });

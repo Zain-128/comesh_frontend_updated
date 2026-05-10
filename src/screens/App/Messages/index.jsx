@@ -23,7 +23,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { Typography } from "../../../components/Typography";
 import { AppContainer } from "../../../components/layouts/AppContainer";
 import colors from "../../../constants/colors";
-import { fontsFamily } from "../../../constants/fonts";
 import { IMAGES } from "../../../constants/images";
 import Actions from "../../../redux/actions/globalActions";
 import { AppendNewMessage } from "../../../redux/globalSlice";
@@ -1089,7 +1088,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
-    fontFamily: fontsFamily.regular,
     color: "#000",
     maxHeight: 100,
     backgroundColor: "#F0F2F5",

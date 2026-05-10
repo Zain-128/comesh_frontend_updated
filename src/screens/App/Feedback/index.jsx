@@ -14,7 +14,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import PrimaryButton from '../../../components/Buttons/PrimaryButton';
 import { Typography } from '../../../components/Typography';
 import { AppContainer } from '../../../components/layouts/AppContainer';
-import { fontsFamily } from '../../../constants/fonts';
 import { IMAGES } from '../../../constants/images';
 import globalActions from '../../../redux/actions/globalActions';
 import { setLoader } from '../../../redux/globalSlice';
@@ -93,7 +92,6 @@ const Deactivate = props => {
             style={{
               height: 100,
               padding: 10,
-              fontFamily: fontsFamily.regular,
               marginVertical: 20,
               borderWidth: 1,
               borderColor: '#E8E8E8',

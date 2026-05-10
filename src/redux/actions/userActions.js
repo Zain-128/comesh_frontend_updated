@@ -1,9 +1,9 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import messaging from "@react-native-firebase/messaging";
 import { Platform } from "react-native";
 import Toast from "react-native-toast-message";
 import RNFetchBlob from "react-native-blob-util";
 import endPoints from "../../constants/endPoints";
+import { getFcmRegistrationToken } from "../../push/fcmToken";
 import apiRequest from "../../utils/apiRequest";
 import { compressImageForUpload, compressVideoForUpload } from "../../utils/compressMedia";
 
@@ -139,7 +139,7 @@ const VerifyOtp = createAsyncThunk("auth/verifyOtp", async (data, thunkAPI) => {
   try {
     let deviceToken;
     try {
-      deviceToken = await messaging().getToken();
+      deviceToken = await getFcmRegistrationToken();
     } catch {
       deviceToken = undefined;
     }

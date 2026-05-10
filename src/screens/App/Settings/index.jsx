@@ -11,13 +11,13 @@ import { heightPercentageToDP, widthPercentageToDP } from 'react-native-responsi
 import { Switch } from 'react-native-switch';
 import Toast from "react-native-toast-message";
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import PrimaryButton from '../../../components/Buttons/PrimaryButton';
 import { Typography } from '../../../components/Typography';
 import { AppContainer } from '../../../components/layouts/AppContainer';
 import colors from '../../../constants/colors';
 import { ContentType } from '../../../constants/endPoints';
-import { fontsFamily, fontsSize } from '../../../constants/fonts';
+import { fontsSize } from '../../../constants/fonts';
 import { logoutUser } from '../../../redux/userSlice';
 import chatSocket from '../../../utils/chatSocket';
 import userActions from '../../../redux/actions/userActions';
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: fontsSize.lg1,
-    fontFamily: fontsFamily.semibold,
+    fontWeight: '600',
     color: "#999",
   },
 });

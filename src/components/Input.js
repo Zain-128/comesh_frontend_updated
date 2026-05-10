@@ -1,8 +1,6 @@
 import React from 'react';
 import { Image, TextInput, View } from 'react-native';
 import { widthPercentageToDP } from 'react-native-responsive-screen';
-import { fontsFamily } from '../constants/fonts';
-
 const Input = (props) => (
   <View style={{
     backgroundColor: "#fff", borderRadius: props?.height ? 20 : 50, elevation: 5, shadowColor: "#999",
@@ -21,7 +19,7 @@ const Input = (props) => (
       {...props}
       placeholderTextColor={"#787878"}
       style={{
-        flex: 1, ...props.style, height: props?.height ? props.height : 60, fontFamily: fontsFamily.regular, textAlignVertical: props?.height ? "top" : "center", padding: props?.height ? 10 : 0, color: "#000"
+        flex: 1, ...props.style, height: props?.height ? props.height : 60, textAlignVertical: props?.height ? "top" : "center", padding: props?.height ? 10 : 0, color: "#000"
       }}
     />
   </View>

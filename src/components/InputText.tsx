@@ -2,8 +2,6 @@ import React from 'react';
 import {View, TextInput, StyleSheet, Platform} from 'react-native';
 import {Typography} from './Typography';
 import colors from '../constants/colors';
-import {fontsFamily} from '../constants/fonts';
-
 export const InputText = (props: any) => {
   const {
     label = null,
@@ -46,7 +44,6 @@ export const InputText = (props: any) => {
         {leftIcon}
         <TextInput
           style={{
-            fontFamily: fontsFamily.regular,
             flex: 1,
             color: textColor,
             ...inputStyle

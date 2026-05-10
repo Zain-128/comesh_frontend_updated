@@ -1,6 +1,5 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { fontsFamily } from '../constants/fonts';
 
 type Props = {
   textType?: 'bold' | 'semiBold' | 'medium' | 'regular' | 'light';
@@ -11,6 +10,17 @@ type Props = {
   children: any;
   numberOfLines?: number;
   capitalize?: boolean;
+};
+
+const weightForType: Record<
+  NonNullable<Props['textType']>,
+  `${number}` | 'normal' | 'bold'
+> = {
+  bold: '700',
+  semiBold: '600',
+  medium: '500',
+  regular: '400',
+  light: '300',
 };
 
 export const Typography = (props: Props) => {
@@ -24,33 +34,14 @@ export const Typography = (props: Props) => {
     capitalize = false,
   } = props;
 
-  let textStyle: any = {
+  const textStyle: any = {
     fontSize: size,
     color: color,
     textAlign: align,
     textTransform: capitalize ? 'capitalize' : 'none',
+    fontWeight: weightForType[textType] ?? '400',
     ...style,
   };
-  switch (textType) {
-    case 'bold':
-      textStyle.fontFamily = fontsFamily.bold;
-      break;
-    case 'semiBold':
-      textStyle.fontFamily = fontsFamily.semibold;
-      break;
-    case 'medium':
-      textStyle.fontFamily = fontsFamily.medium;
-      break;
-    case 'regular':
-      textStyle.fontFamily = fontsFamily.regular;
-      break;
-    case 'light':
-      textStyle.fontFamily = fontsFamily.light;
-      break;
-    default:
-      textStyle.fontFamily = fontsFamily.regular;
-      break;
-  }
 
   return (
     <Text style={textStyle} numberOfLines={numberOfLines}>

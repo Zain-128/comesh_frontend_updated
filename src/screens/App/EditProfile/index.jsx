@@ -84,7 +84,9 @@ const EditProfile = props => {
     { Q: "Add your availability?", options: ["date"], selected: new Date(userData?.availability) },
     { Q: "Do you want to show your location?", options: ["Yes", "No"], selected: userData?.showLocation ? "Yes" : "No" },
   ]);
-  const [prevMedia, setPrevMedia] = useState(userData?.videos ? userData?.videos.map(v => ({ uri: v.url })) : null);
+  const [prevMedia, setPrevMedia] = useState(
+    Array.isArray(userData?.videos) ? userData.videos.map(v => ({ uri: v.url })) : []
+  );
   const [media, setMedia] = useState([]);
   const [profile_pic, setProfilePic] = useState({
     uri: userData?.profileVideo
@@ -182,8 +184,17 @@ const EditProfile = props => {
       videoQuality: "medium",
       selectionLimit: Math.min(5, cap - existing - media.length)
     }, (response) => {
-      if (!response.didCancel && !response.errorMessage) {
-        let video = response.assets[0];
+      if (!response?.didCancel && !response?.errorMessage) {
+        const first = response?.assets?.[0];
+        if (!first) {
+          Toast.show({
+            text1: "No video selected",
+            text2: "Please select a video to continue.",
+            type: "error",
+          });
+          return;
+        }
+        let video = first;
         setMedia([...media, {
           name: video.fileName,
           size: video.fileSize,
@@ -223,8 +234,17 @@ const EditProfile = props => {
       videoQuality: "medium",
       selectionLimit: 1
     }, (response) => {
-      if (!response.didCancel && !response.errorMessage) {
-        let video = response.assets[0];
+      if (!response?.didCancel && !response?.errorMessage) {
+        const first = response?.assets?.[0];
+        if (!first) {
+          Toast.show({
+            text1: "No video selected",
+            text2: "Please select a video to continue.",
+            type: "error",
+          });
+          return;
+        }
+        let video = first;
         if (video.duration > 30) {
           Toast.show({
             text1: "Warning",
@@ -276,7 +296,7 @@ const EditProfile = props => {
   const UploadAndUpdate = async () => {
     setUploading(true)
     await dispatch(userActions.UploadProfileMedia({
-      prevMedia: prevMedia ? prevMedia.map((v) => ({ url: v.uri })) : null,
+      prevMedia: prevMedia?.length ? prevMedia.map((v) => ({ url: v.uri })) : null,
       video: media,
       onProgress: (pe) => {
         setTimeout(() => {
@@ -832,7 +852,7 @@ const EditProfile = props => {
                 if (media.length > 0)
                   UploadAndUpdate();
                 else
-                  UpdateAccount(prevMedia.map(v => ({ url: v.uri })));
+                  UpdateAccount(prevMedia?.length ? prevMedia.map(v => ({ url: v.uri })) : []);
               }}
               style={{ marginTop: heightPercentageToDP(3) }}
             />

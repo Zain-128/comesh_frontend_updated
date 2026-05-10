@@ -13,7 +13,7 @@ import { SelectPicker } from '../../../components/SelectPicket';
 import Text from '../../../components/Text';
 import { Typography } from '../../../components/Typography';
 import { AppContainer } from '../../../components/layouts/AppContainer';
-import { fontsFamily, fontsSize } from '../../../constants/fonts';
+import { fontsSize } from '../../../constants/fonts';
 import globalActions from '../../../redux/actions/globalActions';
 import { setDashLoader } from '../../../redux/globalSlice';
 import helper from '../../../utils/helper';
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: fontsSize.lg1,
-    fontFamily: fontsFamily.semibold,
+    fontWeight: '600',
     color: "#999",
   },
 });

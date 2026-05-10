@@ -1,8 +1,12 @@
-import messaging from '@react-native-firebase/messaging';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import notifee, { AuthorizationStatus } from '@notifee/react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -20,27 +24,77 @@ import {
 import Video from 'react-native-video';
 
 // local import
-import { Keyboard } from 'react-native';
 import Toast from "react-native-toast-message";
 import { useDispatch } from "react-redux";
 import images from '../../assets/images';
 import PrimaryButton from '../../components/Buttons/PrimaryButton';
 import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
-import { fontsFamily, fontsSize } from '../../constants/fonts';
+import { fontsSize } from '../../constants/fonts';
 import userActions from '../../redux/actions/userActions';
+import { getFcmRegistrationToken } from '../../push/fcmToken';
+import { obtainFcmToken } from '../../push/notifeeSetup';
 import { setLoader } from '../../redux/globalSlice';
+import { setFcmDeviceToken } from '../../redux/userSlice';
+import { validatePhoneForCountry } from '../../utils/phoneValidation';
 
 let otp = '';
 
 const Login = (props) => {
   const refInput = useRef();
+  /** Last E.164 from libphonenumber validation (modal + VerifyPhone must match). */
+  const lastPhoneE164Ref = useRef('');
   const [show, setShow] = useState(false);
   const [modal, setModal] = useState(false);
   const [countryCode, setCountryCode] = useState('US');
   const [selectCountry, setSelectCountry] = useState('1');
   const [mobileNo, setMobileNo] = useState('');
   const dispatch = useDispatch();
+
+  /**
+   * Ask for notification permission on Login after this screen is focused.
+   * Short delay so the splash → Login transition finishes before the system dialog.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const timer = setTimeout(async () => {
+        try {
+          const token =
+            (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
+          if (cancelled) return;
+          if (token) dispatch(setFcmDeviceToken(token));
+          try {
+            const ns = await notifee.getNotificationSettings();
+            if (
+              !cancelled &&
+              ns?.authorizationStatus === AuthorizationStatus.DENIED
+            ) {
+              Alert.alert(
+                'Notifications off',
+                'OTP / alerts need notifications. Enable in Settings → CoMesh → Notifications.',
+                [
+                  { text: 'Later', style: 'cancel' },
+                  {
+                    text: 'Open Settings',
+                    onPress: () => Linking.openSettings(),
+                  },
+                ],
+              );
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      }, 550);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }, [dispatch]),
+  );
 
   useEffect(() => {
     Keyboard.addListener("keyboardDidHide", (ev) => {
@@ -49,19 +103,26 @@ const Login = (props) => {
     })
   }, [])
 
+  /** Uses token from focus effect when possible; otherwise requests permission here too. */
   const LoginFunc = async () => {
-    if (mobileNo == "") {
+    const parsed = validatePhoneForCountry(countryCode, mobileNo);
+    if (!parsed.ok) {
       Toast.show({
         text1: "Warning",
         type: "error",
-        text2: "Please enter phone number to continue"
-      })
+        text2: parsed.message,
+      });
       return;
     }
+    const phone = parsed.e164;
+    lastPhoneE164Ref.current = phone;
     dispatch(setLoader(true))
     try {
-      let token = await messaging().getToken();
-      let phone = "+" + selectCountry + mobileNo;
+      let token =
+        (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
+      if (token) {
+        dispatch(setFcmDeviceToken(token));
+      }
       await dispatch(userActions.SignIn({
         phone,
         token,
@@ -199,7 +260,7 @@ const Login = (props) => {
             <View style={{ gap: 20 }}>
               <PrimaryButton text={"Yes, Re-Activate account"} onPress={() => {
                 setModal(false)
-                props.navigation.navigate('VerifyPhone', { phone: selectCountry + mobileNo, otp })
+                props.navigation.navigate('VerifyPhone', { phone: lastPhoneE164Ref.current, otp })
               }} />
               <TouchableOpacity style={{ alignItems: 'center', }} onPress={() => setModal(false)}>
                 <Typography textType='semiBold' color='#aaa'>
@@ -258,7 +319,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     alignSelf: 'center',
     fontSize: fontsSize.lg2,
-    fontFamily: fontsFamily.bold,
+    fontWeight: '700',
     color: colors.white,
     marginTop: heightPercentageToDP(2),
   },
@@ -266,7 +327,7 @@ const styles = StyleSheet.create({
   text2: {
     textAlign: 'center',
     fontSize: fontsSize.md1,
-    fontFamily: fontsFamily.medium,
+    fontWeight: '500',
     color: colors.white,
     marginHorizontal: widthPercentageToDP(2),
   },

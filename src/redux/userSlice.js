@@ -11,8 +11,14 @@ const userSlice = createSlice({
     userData: {},
     userRegister: {},
     token: "",
+    /** Latest FCM token after splash permission + registration (also stored on server when logged in). */
+    fcmDeviceToken: "",
   },
   reducers: {
+    setFcmDeviceToken(state, action) {
+      state.fcmDeviceToken =
+        typeof action.payload === "string" ? action.payload : "";
+    },
     setFirstTime(state, action) {
       state.isFirstTime = action.payload;
     },
@@ -47,12 +53,14 @@ const userSlice = createSlice({
       state.userData = null;
       state.userRegister = null;
       state.token = "";
+      state.fcmDeviceToken = "";
     },
     resetVerfiy(state, action) {
       state.userData = null;
       state.isLogin = false;
       state.isFirstTime = true;
       state.token = "";
+      state.fcmDeviceToken = "";
     },
   },
   extraReducers: (builder) => {
@@ -177,6 +185,12 @@ const userSlice = createSlice({
   },
 });
 
-export const { setUser, logoutUser, setFirstTime, updateUserLikes, resetVerfiy } =
-  userSlice.actions;
+export const {
+  setUser,
+  logoutUser,
+  setFirstTime,
+  setFcmDeviceToken,
+  updateUserLikes,
+  resetVerfiy,
+} = userSlice.actions;
 export default userSlice.reducer;

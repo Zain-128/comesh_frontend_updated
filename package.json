@@ -28,6 +28,7 @@
     "axios": "^1.14.0",
     "imagekit-javascript": "^4.0.1",
     "install": "^0.13.0",
+    "libphonenumber-js": "^1.13.0",
     "lodash": "^4.17.23",
     "lottie-react-native": "^7.3.5",
     "moment": "^2.30.1",

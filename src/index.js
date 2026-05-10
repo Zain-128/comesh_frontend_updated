@@ -1,5 +1,4 @@
-// import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import LinearGradient from 'react-native-linear-gradient';
@@ -9,11 +8,16 @@ import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import colors from './constants/colors';
 import RootStack from './navigation/RootStack';
+import {
+  registerBackgroundHandler,
+  subscribeForegroundMessages,
+} from './push/notifeeSetup';
 import { persistor, store } from './redux/store';
 
 // Hide timeout-related error toasts globally.
 if (!Toast.__timeoutFilterPatched) {
-  const originalShow = Toast.show?.bind(Toast);
+  const originalShow =
+    typeof Toast.show === 'function' ? Toast.show.bind(Toast) : null;
   Toast.show = (options = {}) => {
     const msg = `${options?.text1 || ''} ${options?.text2 || ''}`.toLowerCase();
     if (
@@ -23,13 +27,26 @@ if (!Toast.__timeoutFilterPatched) {
     ) {
       return;
     }
-    return originalShow?.(options);
+    return typeof originalShow === 'function' ? originalShow(options) : undefined;
   };
   Toast.__timeoutFilterPatched = true;
 }
 
 /** Gradient edge-to-edge; app UI sits inside SafeAreaView (safe-area-context). */
 const App = () => {
+  const unsubForeground = useRef(null);
+
+  useEffect(() => {
+    /** FCM / Notifee touch native TurboModules — must run after JS runtime is ready (avoid `[runtime not ready]: undefined is not a function`). */
+    registerBackgroundHandler();
+    unsubForeground.current = subscribeForegroundMessages();
+    return () => {
+      if (typeof unsubForeground.current === 'function') {
+        unsubForeground.current();
+      }
+    };
+  }, []);
+
   return (
     <GestureHandlerRootView style={styles.flex1}>
       <SafeAreaProvider>
