@@ -14,6 +14,13 @@ import { getFcmRegistrationToken } from './fcmToken';
 import { pushLog } from './pushLog';
 
 const CHANNEL_ID = 'comesh';
+const IOS_FOREGROUND_PRESENTATION_OPTIONS = {
+  alert: true,
+  badge: true,
+  sound: true,
+  banner: true,
+  list: true,
+};
 
 /** Maps Firebase `AuthorizationStatus` number → name (NOT_DETERMINED=-1, DENIED=0, AUTHORIZED=1, …). */
 export function firebaseAuthStatusLabel(code) {
@@ -149,76 +156,113 @@ function resolveTitleBody(remoteMessage) {
   return { title: String(title), body: String(body) };
 }
 
+async function displayRemoteNotification(remoteMessage) {
+  const channelId = await ensureAndroidChannel();
+  const { title, body } = resolveTitleBody(remoteMessage);
+  await notifee.displayNotification({
+    title,
+    body,
+    android: {
+      channelId,
+      pressAction: { id: 'default' },
+    },
+    ios: {
+      sound: 'default',
+      foregroundPresentationOptions: IOS_FOREGROUND_PRESENTATION_OPTIONS,
+    },
+    data: remoteMessage.data,
+  });
+}
+
 let backgroundHandlerRegistered = false;
 
 /**
  * Background / quit: data-only FCM → Notifee (notification payloads are shown by the OS).
  */
 export function registerBackgroundHandler() {
+  pushLog('registerBackgroundHandler: called', {
+    alreadyRegistered: backgroundHandlerRegistered,
+  });
   if (backgroundHandlerRegistered) {
     return;
   }
-  if (!getApps().length) {
-    return;
-  }
-  try {
-    const msg = messagingInstance();
-    setBackgroundMessageHandler(msg, async (remoteMessage) => {
-      pushLog('FCM background handler fired', {
-        messageId: remoteMessage.messageId,
-        hasNotification: Boolean(
-          remoteMessage.notification?.title || remoteMessage.notification?.body,
-        ),
-      });
-      if (remoteMessage.notification?.title || remoteMessage.notification?.body) {
-        return;
-      }
-      const channelId = await ensureAndroidChannel();
-      const { title, body } = resolveTitleBody(remoteMessage);
-      await notifee.displayNotification({
-        title,
-        body,
-        android: {
-          channelId,
-          pressAction: { id: 'default' },
-        },
-        ios: { sound: 'default' },
-        data: remoteMessage.data,
-      });
+  waitForFirebaseReady().then((ready) => {
+    pushLog('registerBackgroundHandler: Firebase readiness resolved', {
+      ready,
+      isActive: true,
+      alreadyRegistered: backgroundHandlerRegistered,
     });
-    backgroundHandlerRegistered = true;
-  } catch (e) {
-    pushLog('registerBackgroundHandler failed', e?.message ?? e);
-  }
+    if (!ready || backgroundHandlerRegistered) {
+      return;
+    }
+    try {
+      const msg = messagingInstance();
+      setBackgroundMessageHandler(msg, async (remoteMessage) => {
+        pushLog('FCM background handler fired', {
+          messageId: remoteMessage.messageId,
+          hasNotification: Boolean(
+            remoteMessage.notification?.title || remoteMessage.notification?.body,
+          ),
+        });
+        if (remoteMessage.notification?.title || remoteMessage.notification?.body) {
+          return;
+        }
+        await displayRemoteNotification(remoteMessage);
+      });
+      backgroundHandlerRegistered = true;
+      pushLog('registerBackgroundHandler: registered');
+    } catch (e) {
+      pushLog('registerBackgroundHandler failed', e?.message ?? e);
+    }
+  });
 }
 
 /** Foreground FCM → Notifee banner. */
 export function subscribeForegroundMessages() {
-  if (!getApps().length) {
-    return () => {};
-  }
-  try {
-    const msg = messagingInstance();
-    return onMessage(msg, async (message) => {
-      pushLog('FCM foreground onMessage', {
-        messageId: message.messageId,
-        hasNotification: Boolean(message.notification),
-      });
-      const channelId = await ensureAndroidChannel();
-      const { title, body } = resolveTitleBody(message);
-      await notifee.displayNotification({
-        title,
-        body,
-        android: {
-          channelId,
-          pressAction: { id: 'default' },
-        },
-        ios: { sound: 'default' },
-        data: message.data,
-      });
+  let isActive = true;
+  let unsubscribe = null;
+
+  pushLog('subscribeForegroundMessages: called');
+  waitForFirebaseReady().then((ready) => {
+    pushLog('subscribeForegroundMessages: Firebase readiness resolved', {
+      ready,
+      isActive,
     });
-  } catch (e) {
-    pushLog('subscribeForegroundMessages failed', e?.message ?? e);
-    return () => {};
-  }
+    if (!ready || !isActive) {
+      pushLog('subscribeForegroundMessages: skipped registration', {
+        ready,
+        isActive,
+      });
+      return;
+    }
+    try {
+      const msg = messagingInstance();
+      unsubscribe = onMessage(msg, async (message) => {
+        pushLog('FCM foreground onMessage', {
+          messageId: message.messageId,
+          hasNotification: Boolean(message.notification),
+        });
+        try {
+          await displayRemoteNotification(message);
+          pushLog('FCM foreground notification displayed');
+        } catch (e) {
+          pushLog('FCM foreground display failed', e?.message ?? e);
+        }
+      });
+      pushLog('subscribeForegroundMessages: registered');
+    } catch (e) {
+      pushLog('subscribeForegroundMessages failed', e?.message ?? e);
+    }
+  });
+
+  return () => {
+    pushLog('subscribeForegroundMessages: cleanup called', {
+      hadUnsubscribe: typeof unsubscribe === 'function',
+    });
+    isActive = false;
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+      pushLog('subscribeForegroundMessages: unsubscribed');
+    }
+  };
 }
