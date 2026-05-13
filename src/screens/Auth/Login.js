@@ -32,8 +32,9 @@ import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
 import { fontsSize } from '../../constants/fonts';
 import userActions from '../../redux/actions/userActions';
-import { getFcmRegistrationToken } from '../../push/fcmToken';
+import { fcmTokenLabel, getFcmRegistrationToken } from '../../push/fcmToken';
 import { obtainFcmToken } from '../../push/notifeeSetup';
+import { pushLog } from '../../push/pushLog';
 import { setLoader } from '../../redux/globalSlice';
 import { setFcmDeviceToken } from '../../redux/userSlice';
 import { validatePhoneForCountry } from '../../utils/phoneValidation';
@@ -63,6 +64,7 @@ const Login = (props) => {
           const token =
             (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
           if (cancelled) return;
+          pushLog('Login focus: FCM token resolved', fcmTokenLabel(token));
           if (token) dispatch(setFcmDeviceToken(token));
           try {
             const ns = await notifee.getNotificationSettings();
@@ -120,6 +122,7 @@ const Login = (props) => {
     try {
       let token =
         (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
+      pushLog('Login submit: sending FCM token', fcmTokenLabel(token));
       if (token) {
         dispatch(setFcmDeviceToken(token));
       }
