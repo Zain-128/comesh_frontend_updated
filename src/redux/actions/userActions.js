@@ -1,11 +1,20 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import { Platform } from "react-native";
 import Toast from "react-native-toast-message";
-import RNFetchBlob from "react-native-blob-util";
 import endPoints from "../../constants/endPoints";
 import { getFcmRegistrationToken } from "../../push/fcmToken";
 import apiRequest from "../../utils/apiRequest";
-import { compressImageForUpload, compressVideoForUpload } from "../../utils/compressMedia";
+import {
+  logMultipartTextParts,
+  logOnboardingPayload,
+  logOnboardingResponse,
+} from "../../utils/onboardingApiDebug";
+import {
+  appendProfileFormFields,
+  buildProfileMultipartParts,
+  getFetchBlobHttpStatus,
+  putProfileMultipart,
+} from "../../utils/profileMultipartUpload";
 
 /** RNFetchBlob returns body as string; proxies/nginx may return HTML on 413/502 — JSON.parse throws on `<`. */
 function parseUploadJsonBody(raw) {
@@ -30,16 +39,6 @@ function parseUploadJsonBody(raw) {
       success: false,
       message: s.length > 180 ? `${s.slice(0, 180)}…` : s || "Invalid response",
     };
-  }
-}
-
-function getFetchBlobHttpStatus(resp) {
-  try {
-    const i = typeof resp.info === "function" ? resp.info() : resp.respInfo;
-    const n = Number(i?.status ?? i?.statusCode ?? 0);
-    return Number.isFinite(n) ? n : 0;
-  } catch {
-    return 0;
   }
 }
 
@@ -176,18 +175,23 @@ const UpdateProfile = createAsyncThunk(
       let params = {
         ...rest,
       };
-      let result = await apiRequest.put(endPoints.UpdateProfile, params, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+      logOnboardingPayload("UpdateProfile PUT body (JSON)", params);
+      let result = await apiRequest.put(endPoints.UpdateProfile, params);
+      logOnboardingResponse("UpdateProfile PUT success", result.data, {
+        httpStatus: result.status,
       });
       callback(result.data);
       return data.isFirstTime
         ? { ...result.data, isFirstTime: data.isFirstTime }
         : result.data;
     } catch (error) {
-      console.warn("rerere", error);
+      console.warn("updateProfile", error);
       let eRes = error?.response?.data;
+      logOnboardingResponse("UpdateProfile PUT error", eRes || { message: error?.message }, {
+        httpStatus: error?.response?.status,
+      });
+      const message =
+        eRes?.message || error?.message || "Profile update failed";
       if (eRes) {
         Toast.show({
           type: "error",
@@ -201,6 +205,11 @@ const UpdateProfile = createAsyncThunk(
           text2: error.message,
         });
       }
+      const failed = { success: false, message };
+      if (typeof data.callback === "function") {
+        data.callback(failed);
+      }
+      return failed;
     }
   }
 );
@@ -233,6 +242,56 @@ const UpdateNotifications = createAsyncThunk(
   }
 );
 
+async function runProfileMultipartUpload(data, fileOpts, thunkAPI) {
+  const token = data?.token || thunkAPI.getState().user.token;
+  const parts = await buildProfileMultipartParts(fileOpts);
+  if (data?.formFields) {
+    logOnboardingPayload("multipart PUT formFields (before append)", data.formFields);
+    appendProfileFormFields(parts, data.formFields);
+    logMultipartTextParts("multipart PUT parts", parts);
+  }
+  if (!parts.length) {
+    const empty = { success: false, message: "Nothing to upload" };
+    if (typeof data?.callback === "function") {
+      data.callback(empty);
+    }
+    return empty;
+  }
+  const resp = await putProfileMultipart({
+    url: profileUploadUrl(),
+    token,
+    parts,
+    onProgress: data?.onProgress,
+    timeoutMs: data?.timeoutMs || 300000,
+  });
+  const status = getFetchBlobHttpStatus(resp);
+  const raw =
+    typeof resp.text === "function" ? await resp.text() : resp.data;
+  const parsed = parseUploadJsonBody(raw);
+  if (status >= 400) {
+    const merged = {
+      success: false,
+      message: parsed?.message || `Upload failed (HTTP ${status})`,
+      ...parsed,
+    };
+    logOnboardingResponse("multipart PUT error", merged, { httpStatus: status });
+    if (typeof data?.callback === "function") {
+      data.callback(merged);
+    }
+    Toast.show({
+      type: "error",
+      text1: "Upload failed",
+      text2: merged.message,
+    });
+    return thunkAPI.rejectWithValue(merged);
+  }
+  logOnboardingResponse("multipart PUT success", parsed, { httpStatus: status });
+  if (typeof data?.callback === "function") {
+    data.callback(parsed);
+  }
+  return parsed;
+}
+
 const UploadVideo = createAsyncThunk(
   "user/uploadProfileVideo",
   async (data, thunkAPI) => {
@@ -241,237 +300,97 @@ const UploadVideo = createAsyncThunk(
       console.log(`${uploadTag} start`, {
         hasAvatar: Boolean(data.profileImage?.uri),
         hasVideo: Boolean(data.video?.uri),
-        videoName: data.video?.name,
-        videoType: data.video?.type,
         url: profileUploadUrl(),
       });
-
-      console.log(`${uploadTag} compressing video…`, {
-        in: uploadAssetLabel(data.video.uri),
-      });
-      const compressedUri = await compressVideoForUpload(data.video.uri);
-      const uri = compressedUri || data.video.uri;
-      console.log(`${uploadTag} video ready`, {
-        usedCompressor: Boolean(compressedUri),
-        out: uploadAssetLabel(uri),
-      });
-      const baseName =
-        (uri && String(uri).split("/").pop()) || data.video.name || "profile.mp4";
-      const filename = baseName.toLowerCase().endsWith(".mp4")
-        ? baseName
-        : `${baseName}.mp4`;
-
-      const wrapLocalFile = (fileUri) =>
-        RNFetchBlob.wrap(decodeURIComponent(String(fileUri)).replace("file://", ""));
-
-      const parts = [];
-
-      if (data.profileImage?.uri) {
-        console.log(`${uploadTag} compressing profile image…`, {
-          in: uploadAssetLabel(data.profileImage.uri),
-          type: data.profileImage.type,
-        });
-        const imgCompressed = await compressImageForUpload(data.profileImage.uri);
-        const imgUri = imgCompressed || data.profileImage.uri;
-        console.log(`${uploadTag} profile image ready`, {
-          usedCompressor: Boolean(imgCompressed),
-          out: uploadAssetLabel(imgUri),
-        });
-        const rawName =
-          (imgUri && String(imgUri).split("/").pop()) ||
-          data.profileImage.name ||
-          data.profileImage.fileName ||
-          "avatar.jpg";
-        /** Always .jpg + image/jpeg so multer/sharp on Linux (Render) never see non-standard `image/jpg`. */
-        const baseStem = String(rawName).replace(/\.[^/.]+$/, "") || "avatar";
-        const imgFilename = `${baseStem}.jpg`;
-        parts.push({
-          name: "profileImage",
-          filename: imgFilename,
-          type: "image/jpeg",
-          data: wrapLocalFile(imgUri),
-        });
-      }
-
-      parts.push({
-        name: "profileVideo",
-        filename,
-        type: data.video.type || "video/mp4",
-        data: wrapLocalFile(uri),
-      });
-
-      console.log(`${uploadTag} multipart parts`, {
-        count: parts.length,
-        parts: parts.map((p) => ({
-          name: p.name,
-          filename: p.filename,
-          type: p.type,
-        })),
-      });
-
-      let lastProgressBucket = -1;
-      let resp = await RNFetchBlob.fetch(
-        "PUT",
-        profileUploadUrl(),
+      return await runProfileMultipartUpload(
+        data,
         {
-          Authorization: `Bearer ${thunkAPI.getState().user.token}`,
-          "Content-Type": "multipart/form-data",
+          profileVideo: data?.video,
+          profileImage: data?.profileImage,
         },
-        parts
-      ).uploadProgress((sent, total) => {
-        data.onProgress({ sent, total });
-        if (total > 0) {
-          const pct = Math.floor((sent / total) * 100);
-          const bucket = Math.min(10, Math.floor(pct / 10));
-          if (bucket !== lastProgressBucket) {
-            lastProgressBucket = bucket;
-            console.log(`${uploadTag} upload ${pct}% (${sent}/${total} bytes)`);
-          }
-        }
-      });
-      const status = getFetchBlobHttpStatus(resp);
-      const parsed = parseUploadJsonBody(resp.data);
-      console.log(`${uploadTag} response`, {
-        httpStatus: status,
-        success: parsed?.success,
-        message: parsed?.message,
-      });
-      if (status >= 400) {
-        const merged = {
-          success: false,
-          message: parsed?.message || `Upload failed (HTTP ${status})`,
-          ...parsed,
-        };
-        data.callback(merged);
-        Toast.show({
-          type: "error",
-          text1: "Upload failed",
-          text2: merged.message,
-        });
-        return merged;
-      }
-      data.callback(parsed);
-      console.log(`${uploadTag} finished OK (server success)`);
-      return parsed;
+        thunkAPI,
+      );
     } catch (error) {
       console.warn(`${uploadTag} error`, error?.message || error);
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message,
-        });
-      } else {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message,
-        });
+      const errRes = {
+        success: false,
+        message: error?.message || "Upload failed",
+      };
+      if (typeof data.callback === "function") {
+        data.callback(errRes);
       }
-      return { success: false, message: error?.message || "Upload failed" };
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: errRes.message,
+      });
+      return errRes;
     }
-  }
+  },
 );
 
 const UploadProfileMedia = createAsyncThunk(
   "auth/UploadProfileMedia",
   async (data, thunkAPI) => {
-    const compressedList = await Promise.all(
-      (data?.video || []).map(async (vid) => {
-        const outUri = await compressVideoForUpload(vid.uri);
-        return { ...vid, uri: outUri || vid.uri };
-      })
-    );
-
-    let params = [
-      ...compressedList.map((vid) => {
-        const uri = vid.uri;
-        const baseName =
-          (uri && String(uri).split("/").pop()) ||
-          vid.name ||
-          vid.fileName ||
-          "clip.mp4";
-        const filename = baseName.toLowerCase().endsWith(".mp4")
-          ? baseName
-          : `${baseName}.mp4`;
-        return {
-          name: "videos",
-          filename,
-          type: vid.type || "video/mp4",
-          data:
-            Platform.OS === "android"
-              ? RNFetchBlob.wrap(
-                  decodeURIComponent(uri).replace("file://", "")
-                )
-              : RNFetchBlob.wrap(decodeURIComponent(uri).replace("file://", "")),
-        };
-      }),
-    ];
-    if (data?.prevMedia && data?.prevMedia?.length) {
-      params.push({
-        name: "previousVideos",
-        data: JSON.stringify(data?.prevMedia),
-      });
-    }
     try {
-      return await RNFetchBlob.fetch(
-        "PUT",
-        profileUploadUrl(),
+      return await runProfileMultipartUpload(
+        data,
         {
-          Authorization: `Bearer ${thunkAPI.getState().user.token}`,
-          "Content-Type": "multipart/form-data",
+          galleryVideos: data?.video,
+          previousVideos: data?.prevMedia,
         },
-        params
-      )
-        .uploadProgress((sent, total) => {
-          data.onProgress({ sent, total });
-        })
-        .then((resp) => {
-          const status = getFetchBlobHttpStatus(resp);
-          const parsed = parseUploadJsonBody(resp.data);
-          if (status >= 400) {
-            const merged = {
-              success: false,
-              message: parsed?.message || `Upload failed (HTTP ${status})`,
-              ...parsed,
-            };
-            data.callback(merged);
-            Toast.show({
-              type: "error",
-              text1: "Upload failed",
-              text2: merged.message,
-            });
-            return merged;
-          }
-          data.callback(parsed);
-          return parsed;
-        })
-        .catch((reason) => {
-          Toast.show({
-            type: "error",
-            text1: "Error",
-            text2: reason,
-          });
-        });
+        thunkAPI,
+      );
     } catch (error) {
-      console.warn("rerere", error);
-      let eRes = error?.response?.data;
-      if (eRes) {
-        Toast.show({
-          type: "error",
-          text1: eRes.error,
-          text2: eRes.message,
-        });
-      } else {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: error.message,
-        });
+      const errRes = {
+        success: false,
+        message: error?.message || "Upload failed",
+      };
+      if (typeof data.callback === "function") {
+        data.callback(errRes);
       }
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: errRes.message,
+      });
+      return errRes;
     }
-  }
+  },
+);
+
+/** Onboarding final step: all media + profile fields in one multipart PUT. */
+const completeOnboardingUpload = createAsyncThunk(
+  "user/completeOnboardingUpload",
+  async (data, thunkAPI) => {
+    const pending = data?.pending || {};
+    return runProfileMultipartUpload(
+      data,
+      {
+        profileVideo: pending.profileVideo,
+        profileImage: pending.profileImage,
+        galleryVideos: pending.galleryVideos || [],
+      },
+      thunkAPI,
+    );
+  },
+);
+
+/** Edit profile: new videos + optional profile video + JSON fields in one PUT. */
+const saveProfileWithMedia = createAsyncThunk(
+  "user/saveProfileWithMedia",
+  async (data, thunkAPI) => {
+    return runProfileMultipartUpload(
+      data,
+      {
+        profileVideo: data?.profileVideo,
+        profileImage: data?.profileImage,
+        galleryVideos: data?.galleryVideos || [],
+        previousVideos: data?.previousVideos,
+      },
+      thunkAPI,
+    );
+  },
 );
 
 /** POST receipt or (dev) productId — refreshes subscription on user after Apple verify. */
@@ -509,5 +428,7 @@ export default {
   UpdateNotifications,
   UploadVideo,
   UploadProfileMedia,
+  completeOnboardingUpload,
+  saveProfileWithMedia,
   VerifyIosSubscription,
 };

@@ -43,6 +43,15 @@ apiRequest.interceptors.request.use(
     if (data && typeof FormData !== "undefined" && data instanceof FormData) {
       delete config.headers["Content-Type"];
     }
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      const method = (config.method || "get").toUpperCase();
+      const url = displayRequestUrl(config.baseURL, config.url);
+      let bodyPreview = config.data;
+      if (bodyPreview && typeof FormData !== "undefined" && bodyPreview instanceof FormData) {
+        bodyPreview = "[FormData]";
+      }
+      console.log("[API →]", method, url, bodyPreview);
+    }
     return config;
   },
   function (error) {

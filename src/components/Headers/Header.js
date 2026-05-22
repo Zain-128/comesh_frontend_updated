@@ -8,6 +8,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import images from '../../assets/images';
 import userActions from '../../redux/actions/userActions';
+import { buildProfileUpdatePayload } from '../../utils/profileUpdatePayload';
 import { setLoader } from '../../redux/globalSlice';
 import Text from '../Text';
 
@@ -22,9 +23,11 @@ const Header = props => {
   const CreateAccount = async () => {
     dispatch(setLoader(true))
     await dispatch(userActions.UpdateProfile({
-      ...userProfile,
-      isFirstTime: true,
+      ...buildProfileUpdatePayload(userProfile, { isFirstTime: true }),
       callback: (data) => {
+        if (!data?.success) {
+          return;
+        }
         props.navigation.dispatch(
           CommonActions.reset({
             index: 0,

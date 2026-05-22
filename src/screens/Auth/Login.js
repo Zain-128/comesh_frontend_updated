@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+// import notifee from '@notifee/react-native';
 import CountryPicker from 'react-native-country-picker-modal';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -61,9 +62,9 @@ const Login = (props) => {
       let cancelled = false;
       const timer = setTimeout(async () => {
         try {
-          const token =
-            (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
+          const token = await obtainFcmToken();
           if (cancelled) return;
+          console.log("FCM TOKEN =====>", token);
           pushLog('Login focus: FCM token resolved', fcmTokenLabel(token));
           if (token) dispatch(setFcmDeviceToken(token));
           try {
@@ -120,22 +121,39 @@ const Login = (props) => {
     lastPhoneE164Ref.current = phone;
     dispatch(setLoader(true))
     try {
-      let token =
-        (await getFcmRegistrationToken()) ?? (await obtainFcmToken());
+      let token = await obtainFcmToken();
+      console.log("FCM TOKEN =====>", token);
+
       pushLog('Login submit: sending FCM token', fcmTokenLabel(token));
+
+
       if (token) {
         dispatch(setFcmDeviceToken(token));
       }
       await dispatch(userActions.SignIn({
         phone,
         token,
-        callback: (data) => {
+        callback: async (data) => {
           console.warn(data?.data?.otp)
           if (data?.data?.user?.isDeleted) {
             otp = data?.data?.otp;
             setModal(true)
             return;
           }
+          await notifee.displayNotification({
+            title: 'Welcome to CoMesh !',
+            body: `Your Otp is ${data?.data?.otp}`,
+            ios: {
+              sound: 'default',
+              foregroundPresentationOptions: {
+                alert: true,
+                badge: true,
+                sound: true,
+                banner: true,
+                list: true,
+              },
+            },
+          });
           props.navigation.navigate('VerifyPhone', { phone, otp: data?.data?.otp })
         }
       }))
@@ -218,6 +236,7 @@ const Login = (props) => {
                 onPress={() => { LoginFunc() }}
                 style={{ marginTop: heightPercentageToDP(3) }}
               />
+        
               {/* <View style={styles.dividers}>
                 <DividerHorizontal bg="white" h={1} mt={0} w="15%" />
                 <Text style={styles.text2}>OR SIGN IN WITH</Text>

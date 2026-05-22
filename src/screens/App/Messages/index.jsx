@@ -498,7 +498,7 @@ const Messages = (props) => {
           source={
             helper.getMediaSourceOrUri(
               otherUser?.profileImage || otherUser?.profileVideoThumbnail
-            ) ?? (otherUser?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
+            ) ?? IMAGES.profileIcon
           }
           style={styles.headerAvatar}
         />

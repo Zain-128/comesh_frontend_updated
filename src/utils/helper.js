@@ -63,10 +63,18 @@ const getMediaSource = (input) => {
 /** Use for any `{ uri: helper.resolveMediaUrl(...) }` — forwards ngrok header when needed. */
 const getMediaSourceOrUri = (input) => getMediaSource(input) || undefined;
 
+/** Video poster: legacy thumb → compressed MP4 → avatar (no server ffmpeg thumbnail). */
+const videoPosterUrl = (thumbnailUrl, videoUrl, fallbackImage) =>
+  resolveMediaUrl(thumbnailUrl) ||
+  resolveMediaUrl(videoUrl) ||
+  resolveMediaUrl(fallbackImage) ||
+  "";
+
 export default {
   FollowersPrefix,
   sentenceCase,
   resolveMediaUrl,
   getMediaSource,
   getMediaSourceOrUri,
+  videoPosterUrl,
 };

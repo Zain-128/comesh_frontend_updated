@@ -22,8 +22,8 @@ export async function compressImageForUpload(uri) {
 }
 
 /**
- * Client-side video compression before upload (smaller payload, faster upload).
- * Falls back to original uri if compression fails.
+ * Client-side video compression before upload (primary shrink step).
+ * Server runs one ffmpeg pass (MP4 only, no thumbnail extract).
  */
 export async function compressVideoForUpload(uri, onProgress) {
   if (!uri) return uri;
@@ -32,8 +32,8 @@ export async function compressVideoForUpload(uri, onProgress) {
       uri,
       {
         compressionMethod: "auto",
-        maxSize: 960,
-        minimumFileSizeForCompress: 256 * 1024,
+        maxSize: 720,
+        minimumFileSizeForCompress: 128 * 1024,
       },
       typeof onProgress === "function" ? (progress) => onProgress(progress) : undefined
     );

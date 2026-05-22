@@ -1,27 +1,28 @@
 import React, { useState } from 'react';
 import { Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useImagePickerLock } from '../../utils/imagePickerSafe';
-import * as Progress from 'react-native-progress';
 import { heightPercentageToDP, widthPercentageToDP } from 'react-native-responsive-screen';
 import Toast from 'react-native-toast-message';
 import Video from 'react-native-video';
 import { useDispatch } from "react-redux";
+import VideoPickerThumbnail from '../../components/VideoPickerThumbnail';
 import PrimaryButton from '../../components/Buttons/PrimaryButton';
 import Container from '../../components/Container';
 import { SelectPicker } from '../../components/SelectPicket';
 import Text from '../../components/Text';
-import { Typography } from '../../components/Typography';
 import colors from '../../constants/colors';
-import userActions from '../../redux/actions/userActions';
-import { setUser } from '../../redux/userSlice';
+import { setPendingOnboardingMedia, setUser } from '../../redux/userSlice';
+import { normalizeNicheForApi } from '../../utils/onboardingApiDebug';
+import {
+  multiVideoPickerOptions,
+  normalizeVideoAssets,
+} from '../../utils/videoPickerAsset';
 
 const OnBoard3 = (props) => {
   const [value, setValue] = useState(null);
   const dispatch = useDispatch();
   const [videos, setVideos] = useState([]);
   const [disabled, setDisabled] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [previewUri, setPreviewUri] = useState(null);
   const { launchImageLibrary } = useImagePickerLock();
 
@@ -36,17 +37,12 @@ const OnBoard3 = (props) => {
       return;
     }
     setDisabled(true);
-    launchImageLibrary({
-      mediaType: "video",
-      quality: 0.7,
-      videoQuality: "medium",
-      selectionLimit: remaining,
-    }, (response) => {
+    launchImageLibrary(multiVideoPickerOptions(remaining), (response) => {
       setDisabled(false);
       if (response.didCancel || response.errorMessage) return;
-      const assets = response.assets || [];
-      if (!assets.length) return;
-      setVideos((prev) => [...prev, ...assets].slice(0, 5));
+      const picked = normalizeVideoAssets(response.assets);
+      if (!picked.length) return;
+      setVideos((prev) => [...prev, ...picked].slice(0, 5));
     });
   };
 
@@ -54,64 +50,21 @@ const OnBoard3 = (props) => {
     setVideos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const Upload = async () => {
-    if (videos.length > 0) {
-      setUploading(true)
-      let interval = setInterval(() => {
-        setProgress((p) => {
-          if (p < 1) {
-            return p + (3 / 10)
-          }
-          else {
-            props.navigation.navigate('OnBoard4')
-            setUploading(false)
-            clearInterval(interval);
-          }
-        })
-      }, 1000)
-    }
-    else
-      props.navigation.navigate('OnBoard4')
-  }
-
-  const UploadAndUpdate = async () => {
+  const ContinueToNextStep = () => {
     if (!value) {
       Toast.show({
         text1: "Warning",
-        text2: ""
-      })
+        text2: "Please select your niche to continue",
+        type: "error",
+      });
       return;
     }
-    setUploading(true)
-    await dispatch(userActions.UploadProfileMedia({
-      video: videos,
-      onProgress: (pe) => {
-        setTimeout(() => {
-          setProgress(pe.sent / pe.total)
-        }, 1000)
-      },
-      callback: (data) => {
-        const res = typeof data === "object" && data !== null ? data : {};
-        console.warn(res?.data?.videos);
-        if (res.success) {
-          setUploading(false)
-          setProgress(null)
-          dispatch(setUser({
-            niche: value,
-          }));
-          props.navigation.navigate('OnBoard4')
-        }
-        else {
-          Toast.show({
-            text1: "Error",
-            text2: res.message,
-            type: "error"
-          })
-        }
-      }
-    }))
-
-  }
+    dispatch(setUser({ niche: normalizeNicheForApi(value) }));
+    if (videos.length > 0) {
+      dispatch(setPendingOnboardingMedia({ galleryVideos: videos }));
+    }
+    props.navigation.navigate("OnBoard4");
+  };
 
   return (
     <Container
@@ -178,18 +131,18 @@ const OnBoard3 = (props) => {
                 videos.map((v, idx) =>
                   <View
                     key={v?.uri ? `${v.uri}-${idx}` : `vid-${idx}`}
-                    style={{ overflow: 'hidden', width: widthPercentageToDP(28), height: heightPercentageToDP(20), borderRadius: 10, backgroundColor: "#000", alignItems: 'center', justifyContent: "center" }}>
-                    {v?.uri ? (
-                      <Video
-                        source={{ uri: v.uri }}
-                        style={StyleSheet.absoluteFillObject}
-                        resizeMode="cover"
-                        muted
-                        repeat={false}
-                        paused
-                        disableFocus
-                      />
-                    ) : null}
+                    style={{
+                      overflow: 'hidden',
+                      width: widthPercentageToDP(28),
+                      height: heightPercentageToDP(20),
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <VideoPickerThumbnail
+                      asset={v}
+                      style={StyleSheet.absoluteFillObject}
+                    />
                     <TouchableOpacity
                       style={{ position: "absolute", top: 4, right: 4, zIndex: 2, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, padding: 4 }}
                       onPress={() => removeVideoAt(idx)}
@@ -215,45 +168,9 @@ const OnBoard3 = (props) => {
 
             </View>
           </View>
-          <PrimaryButton
-            text={'Continue'}
-            onPress={() => {
-              if (value == '') {
-                Toast.show({
-                  type: "error",
-                  text1: "Warning",
-                  text2: "Please select your niche to continue"
-                })
-                return;
-              }
-              UploadAndUpdate();
-            }}
-          />
+          <PrimaryButton text={'Continue'} onPress={ContinueToNextStep} />
         </View>
       </ScrollView>
-      <Modal
-        visible={uploading}
-        transparent
-        animationType='slide'
-      >
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: 'center', }}>
-          <View style={{ backgroundColor: "#F9F9FC", gap: 20, height: widthPercentageToDP(90), width: widthPercentageToDP(90), borderRadius: 20, justifyContent: "center", alignItems: 'center', }}>
-            <Typography
-              children={"Uploading"}
-              textType='bold'
-              color='#000'
-              size={30}
-            />
-            <Typography
-              children={"This may take a few moments to load."}
-              textType='medium'
-              color='#666'
-              size={14}
-            />
-            <Progress.Bar progress={progress} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
-          </View>
-        </View>
-      </Modal>
       <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
         <View style={{ flex: 1, backgroundColor: "#000", justifyContent: "center" }}>
           {previewUri ? (

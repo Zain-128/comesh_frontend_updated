@@ -13,6 +13,8 @@ const userSlice = createSlice({
     token: "",
     /** Latest FCM token after splash permission + registration (also stored on server when logged in). */
     fcmDeviceToken: "",
+    /** Local picks during onboarding — one upload on final step. */
+    pendingOnboardingMedia: null,
   },
   reducers: {
     setFcmDeviceToken(state, action) {
@@ -61,6 +63,16 @@ const userSlice = createSlice({
       state.isFirstTime = true;
       state.token = "";
       state.fcmDeviceToken = "";
+      state.pendingOnboardingMedia = null;
+    },
+    setPendingOnboardingMedia(state, action) {
+      state.pendingOnboardingMedia = {
+        ...(state.pendingOnboardingMedia || {}),
+        ...action.payload,
+      };
+    },
+    clearPendingOnboardingMedia(state) {
+      state.pendingOnboardingMedia = null;
     },
   },
   extraReducers: (builder) => {
@@ -182,6 +194,26 @@ const userSlice = createSlice({
         text2: action.error.message,
       });
     });
+    builder.addCase(userActions.completeOnboardingUpload.fulfilled, (state, action) => {
+      const p = action.payload;
+      if (p?.success && p?.data) {
+        state.userData = p.data;
+        state.pendingOnboardingMedia = null;
+        const fromRoot = p.isFirstTime;
+        const fromUser = p.data?.isFirstTime;
+        if (typeof fromRoot === "boolean") {
+          state.isFirstTime = fromRoot;
+        } else if (typeof fromUser === "boolean") {
+          state.isFirstTime = fromUser;
+        }
+      }
+    });
+    builder.addCase(userActions.saveProfileWithMedia.fulfilled, (state, action) => {
+      const p = action.payload;
+      if (p?.success && p?.data) {
+        state.userData = p.data;
+      }
+    });
   },
 });
 
@@ -192,5 +224,7 @@ export const {
   setFcmDeviceToken,
   updateUserLikes,
   resetVerfiy,
+  setPendingOnboardingMedia,
+  clearPendingOnboardingMedia,
 } = userSlice.actions;
 export default userSlice.reducer;

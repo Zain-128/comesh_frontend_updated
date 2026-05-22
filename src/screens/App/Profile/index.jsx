@@ -234,7 +234,7 @@ const Profile = props => {
             <Image
               source={
                 helper.getMediaSourceOrUri(othersProfile?.profileImage || othersProfile?.profileVideoThumbnail) ??
-                (othersProfile?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
+                IMAGES.profileIcon
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -245,7 +245,7 @@ const Profile = props => {
               <Image
                 source={
                   helper.getMediaSourceOrUri(othersProfile.profileImage) ??
-                  (othersProfile?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
+                  IMAGES.profileIcon
                 }
                 style={styles.heroAvatarImg}
                 resizeMode="cover"
@@ -454,7 +454,7 @@ const Profile = props => {
                   style={{}}>
                   <Video
                     source={helper.getMediaSource(i.url) || { uri: helper.resolveMediaUrl(i.url) }}
-                    poster={helper.resolveMediaUrl(i.thumbnailUrl || othersProfile?.profileVideoThumbnail) || undefined}
+                    poster={helper.videoPosterUrl(i.thumbnailUrl, i.url, othersProfile?.profileImage) || undefined}
                     posterResizeMode="cover"
                     muted
                     paused

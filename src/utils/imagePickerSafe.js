@@ -11,9 +11,19 @@ import {
  * Coalesce to a single macrotask and defer app work until after transitions complete
  * (reduces priority-inversion / QoS warnings around heavy native video mapping).
  */
-function wrapPickerCallback(callback) {
+function wrapPickerCallback(callback, { immediate = false } = {}) {
   if (Platform.OS !== "ios" || typeof callback !== "function") {
     return callback;
+  }
+  if (immediate) {
+    let delivered = false;
+    return (response) => {
+      if (delivered) {
+        return;
+      }
+      delivered = true;
+      callback(response);
+    };
   }
   let timeoutId = null;
   let latest = null;
@@ -33,12 +43,27 @@ function wrapPickerCallback(callback) {
   };
 }
 
+function splitPickerOptions(options) {
+  const opts = { ...(options || {}) };
+  const immediate = Boolean(opts.immediateCallback);
+  delete opts.immediateCallback;
+  return { pickerOptions: opts, immediate };
+}
+
 export function launchImageLibrary(options, callback) {
-  return rnLaunchImageLibrary(options, wrapPickerCallback(callback));
+  const { pickerOptions, immediate } = splitPickerOptions(options);
+  return rnLaunchImageLibrary(
+    pickerOptions,
+    wrapPickerCallback(callback, { immediate }),
+  );
 }
 
 export function launchCamera(options, callback) {
-  return rnLaunchCamera(options, wrapPickerCallback(callback));
+  const { pickerOptions, immediate } = splitPickerOptions(options);
+  return rnLaunchCamera(
+    pickerOptions,
+    wrapPickerCallback(callback, { immediate }),
+  );
 }
 
 /**
@@ -50,24 +75,26 @@ export function useImagePickerLock() {
   const launchImageLibraryLocked = useCallback((options, callback) => {
     if (busy.current) return;
     busy.current = true;
-    rnLaunchImageLibrary(options, wrapPickerCallback((res) => {
+    const { pickerOptions, immediate } = splitPickerOptions(options);
+    rnLaunchImageLibrary(pickerOptions, wrapPickerCallback((res) => {
       try {
         callback(res);
       } finally {
         busy.current = false;
       }
-    }));
+    }, { immediate }));
   }, []);
   const launchCameraLocked = useCallback((options, callback) => {
     if (busy.current) return;
     busy.current = true;
-    rnLaunchCamera(options, wrapPickerCallback((res) => {
+    const { pickerOptions, immediate } = splitPickerOptions(options);
+    rnLaunchCamera(pickerOptions, wrapPickerCallback((res) => {
       try {
         callback(res);
       } finally {
         busy.current = false;
       }
-    }));
+    }, { immediate }));
   }, []);
   return { launchImageLibrary: launchImageLibraryLocked, launchCamera: launchCameraLocked };
 }

@@ -14,8 +14,8 @@ export const IMAGES = {
   swipeRight: require('../assets/images/swipe-right.png'),
   arrowLeft: require('../assets/images/arrow-left.png'),
 
-  men: require('../assets/dummy/men.jpg'),
-  women: require('../assets/dummy/women.jpg'),
+  men: require('../assets/images/profileIcon.png'),
+  women: require('../assets/images/profileIcon.png'),
 
   sendIcon: require('../assets/images/sendIcon.png'),
   editIcon: require('../assets/images/editIcon.png'),

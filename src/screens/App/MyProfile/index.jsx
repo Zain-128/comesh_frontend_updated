@@ -143,7 +143,7 @@ const MyProfile = props => {
             <Image
               source={
                 helper.getMediaSourceOrUri(userData?.profileImage || userData?.profileVideoThumbnail) ??
-                (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
+                IMAGES.profileIcon
               }
               resizeMode="cover"
               style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
@@ -153,7 +153,7 @@ const MyProfile = props => {
             <View style={styles.heroAvatarWrap} accessibilityLabel="Profile photo">
               <Image
                 source={
-                  helper.getMediaSourceOrUri(userData.profileImage) ?? (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)
+                  helper.getMediaSourceOrUri(userData.profileImage) ?? IMAGES.profileIcon
                 }
                 style={styles.heroAvatarImg}
                 resizeMode="cover"
@@ -295,7 +295,7 @@ const MyProfile = props => {
               {userData?.videos && userData?.videos.map(i => (
                 <Video
                   source={helper.getMediaSource(i.url) || { uri: helper.resolveMediaUrl(i.url) }}
-                  poster={helper.resolveMediaUrl(i.thumbnailUrl || userData?.profileVideoThumbnail) || undefined}
+                  poster={helper.videoPosterUrl(i.thumbnailUrl, i.url, userData?.profileImage) || undefined}
                   posterResizeMode="cover"
                   muted
                   paused

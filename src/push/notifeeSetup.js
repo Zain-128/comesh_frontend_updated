@@ -13,6 +13,46 @@ import {
 import { getFcmRegistrationToken } from './fcmToken';
 import { pushLog } from './pushLog';
 
+/** Metro / Xcode: grep `[CoMesh/Push/TRACE]` */
+const PUSH_TRACE = '[CoMesh/Push/TRACE]';
+
+function tracePush(step, info) {
+  try {
+    console.log(PUSH_TRACE, step, info);
+  } catch {
+    /* ignore */
+  }
+}
+
+function summarizeRemoteMessage(rm) {
+  if (!rm || typeof rm !== 'object') {
+    return null;
+  }
+  const data = rm.data && typeof rm.data === 'object' ? rm.data : undefined;
+  let dataKeys;
+  let dataPreview;
+  if (data) {
+    dataKeys = Object.keys(data);
+    dataPreview = Object.fromEntries(
+      Object.entries(data).map(([k, v]) => {
+        const s = v == null ? '' : String(v);
+        return [k, s.length > 96 ? `${s.slice(0, 96)}…` : s];
+      }),
+    );
+  }
+  return {
+    messageId: rm.messageId,
+    from: rm.from,
+    collapseKey: rm.collapseKey,
+    sentTime: rm.sentTime,
+    hasNotification: Boolean(rm.notification?.title || rm.notification?.body),
+    notificationTitle: rm.notification?.title,
+    notificationBodyLen: rm.notification?.body != null ? String(rm.notification.body).length : 0,
+    dataKeys,
+    dataPreview,
+  };
+}
+
 const CHANNEL_ID = 'comesh';
 const IOS_FOREGROUND_PRESENTATION_OPTIONS = {
   alert: true,
@@ -156,9 +196,92 @@ function resolveTitleBody(remoteMessage) {
   return { title: String(title), body: String(body) };
 }
 
+/** Metro / Xcode: grep `[CoMesh/Push/FOREGROUND]` */
+const FOREGROUND_TAG = '[CoMesh/Push/FOREGROUND]';
+
+function truncateForLog(value, maxLen) {
+  if (value == null) {
+    return value;
+  }
+  const s = String(value);
+  if (s.length <= maxLen) {
+    return s;
+  }
+  return `${s.slice(0, maxLen)}…(+${s.length - maxLen} more chars)`;
+}
+
+function deepTruncateStrings(value, maxLen) {
+  if (value == null) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return truncateForLog(value, maxLen);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => deepTruncateStrings(item, maxLen));
+  }
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = deepTruncateStrings(v, maxLen);
+    }
+    return out;
+  }
+  return value;
+}
+
+function buildForegroundRemoteMessageLog(message) {
+  const n = message?.notification;
+  return {
+    receivedAt: new Date().toISOString(),
+    platform: Platform.OS,
+    messageId: message?.messageId,
+    from: message?.from,
+    collapseKey: message?.collapseKey,
+    sentTime: message?.sentTime,
+    ttl: message?.ttl,
+    data: message?.data && typeof message.data === 'object' ? { ...message.data } : message?.data,
+    notification: n
+      ? {
+          title: n.title,
+          body: n.body,
+          android: n.android,
+          ios: n.ios,
+        }
+      : undefined,
+  };
+}
+
+function logForegroundFcmReceived(message) {
+  try {
+    const plain = buildForegroundRemoteMessageLog(message);
+    const forJson = deepTruncateStrings(plain, 800);
+    const resolved = resolveTitleBody(message);
+    console.log(FOREGROUND_TAG, '========== FCM foreground onMessage ==========');
+    console.log(FOREGROUND_TAG, 'remoteMessage top-level keys:', Object.keys(message || {}));
+    console.log(
+      FOREGROUND_TAG,
+      'payload (JSON, long strings truncated per field):',
+      JSON.stringify(forJson, null, 2),
+    );
+    console.log(FOREGROUND_TAG, 'resolveTitleBody → Notifee will use:', resolved);
+    console.log(FOREGROUND_TAG, 'summary:', summarizeRemoteMessage(message));
+    console.log(FOREGROUND_TAG, '============================================');
+  } catch (e) {
+    console.log(FOREGROUND_TAG, 'logForegroundFcmReceived failed', e?.message ?? e);
+  }
+}
+
 async function displayRemoteNotification(remoteMessage) {
+  tracePush('displayRemoteNotification:start', summarizeRemoteMessage(remoteMessage));
   const channelId = await ensureAndroidChannel();
   const { title, body } = resolveTitleBody(remoteMessage);
+  tracePush('displayRemoteNotification:resolved', {
+    channelId,
+    title,
+    bodyLen: String(body).length,
+    platform: Platform.OS,
+  });
   await notifee.displayNotification({
     title,
     body,
@@ -171,6 +294,10 @@ async function displayRemoteNotification(remoteMessage) {
       foregroundPresentationOptions: IOS_FOREGROUND_PRESENTATION_OPTIONS,
     },
     data: remoteMessage.data,
+  });
+  tracePush('displayRemoteNotification:notifee.displayNotification OK', {
+    title,
+    bodyLen: String(body).length,
   });
 }
 
@@ -198,6 +325,7 @@ export function registerBackgroundHandler() {
     try {
       const msg = messagingInstance();
       setBackgroundMessageHandler(msg, async (remoteMessage) => {
+        tracePush('FCM background setBackgroundMessageHandler', summarizeRemoteMessage(remoteMessage));
         pushLog('FCM background handler fired', {
           messageId: remoteMessage.messageId,
           hasNotification: Boolean(
@@ -205,6 +333,9 @@ export function registerBackgroundHandler() {
           ),
         });
         if (remoteMessage.notification?.title || remoteMessage.notification?.body) {
+          tracePush('FCM background: skip Notifee (notification payload — OS shows)', {
+            messageId: remoteMessage.messageId,
+          });
           return;
         }
         await displayRemoteNotification(remoteMessage);
@@ -223,8 +354,13 @@ export function subscribeForegroundMessages() {
   let unsubscribe = null;
 
   pushLog('subscribeForegroundMessages: called');
+  tracePush('subscribeForegroundMessages: called', { platform: Platform.OS });
   waitForFirebaseReady().then((ready) => {
     pushLog('subscribeForegroundMessages: Firebase readiness resolved', {
+      ready,
+      isActive,
+    });
+    tracePush('subscribeForegroundMessages: Firebase readiness resolved', {
       ready,
       isActive,
     });
@@ -233,11 +369,22 @@ export function subscribeForegroundMessages() {
         ready,
         isActive,
       });
+      tracePush('subscribeForegroundMessages: SKIPPED onMessage registration', {
+        ready,
+        isActive,
+      });
       return;
     }
     try {
       const msg = messagingInstance();
       unsubscribe = onMessage(msg, async (message) => {
+
+
+
+
+        console.log('messageeeeeeeeeeee', message);
+        logForegroundFcmReceived(message);
+        tracePush('FCM foreground onMessage RAW', summarizeRemoteMessage(message));
         pushLog('FCM foreground onMessage', {
           messageId: message.messageId,
           hasNotification: Boolean(message.notification),
@@ -246,12 +393,19 @@ export function subscribeForegroundMessages() {
           await displayRemoteNotification(message);
           pushLog('FCM foreground notification displayed');
         } catch (e) {
+          tracePush('FCM foreground displayRemoteNotification ERROR', {
+            message: e?.message ?? String(e),
+          });
           pushLog('FCM foreground display failed', e?.message ?? e);
         }
       });
       pushLog('subscribeForegroundMessages: registered');
+      tracePush('subscribeForegroundMessages: onMessage LISTENER REGISTERED', {});
     } catch (e) {
       pushLog('subscribeForegroundMessages failed', e?.message ?? e);
+      tracePush('subscribeForegroundMessages: REGISTER FAILED', {
+        message: e?.message ?? String(e),
+      });
     }
   });
 

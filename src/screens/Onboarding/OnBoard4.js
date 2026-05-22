@@ -1,8 +1,9 @@
 import Geolocation from "@react-native-community/geolocation";
 import { getFcmRegistrationToken } from "../../push/fcmToken";
 import { CommonActions } from "@react-navigation/native";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import UploadProgressOverlay from '../../components/UploadProgressOverlay';
 import Toast from "react-native-toast-message";
 import { useDispatch, useSelector } from "react-redux";
 import PrimaryButton from '../../components/Buttons/PrimaryButton';
@@ -13,7 +14,26 @@ import Text from '../../components/Text';
 import userActions from '../../redux/actions/userActions';
 import { setLoader } from '../../redux/globalSlice';
 import helper from "../../utils/helper";
+import { normalizeUploadResponse } from '../../utils/normalizeUploadResponse';
+import {
+  applyUploadProgress,
+  completeUploadProgress,
+  isMediaProcessingResponse,
+  resetUploadProgress,
+} from '../../utils/uploadProgress';
+import {
+  logOnboardingPayload,
+  logOnboardingResponse,
+} from '../../utils/onboardingApiDebug';
+import { buildProfileUpdatePayload } from '../../utils/profileUpdatePayload';
 import { RangeSliderInput } from "../App/Filter";
+
+/**
+ * Render is still on old server code (ffmpeg `-preset fast`, filename collisions).
+ * Onboarding uploads avatar only; videos after deploy via Edit Profile.
+ * Set to `false` once Render deploys latest `comesh_app_backend` main.
+ */
+const ONBOARDING_SKIP_VIDEO_UPLOAD = true;
 
 const data = [
   { Q: "Are you willing to travel?", options: ["Yes", "No"], selected: "Yes" },
@@ -27,26 +47,59 @@ const OnBoard4 = (props) => {
   const [selectedDates, setSelectedDates] = useState();
   const [values, setValues] = useState(data);
   const userProfile = useSelector(state => state.user.userRegister);
-  /** Media saved on step 1 lives in `userData` after upload / GetMyProfile — merge so final update does not drop them. */
-  const userData = useSelector(state => state.user.userData);
+  const pendingOnboardingMedia = useSelector(
+    (state) => state.user.pendingOnboardingMedia,
+  );
   const dispatch = useDispatch();
-
-  /** URLs already saved on the server during onboarding step 1 — re-send on final profile update so nothing is dropped. */
-  const mediaFromServer = (() => {
-    const m = {};
-    if (userData?.profileImage) m.profileImage = userData.profileImage;
-    if (userData?.profileVideo) m.profileVideo = userData.profileVideo;
-    if (userData?.profileVideoThumbnail) {
-      m.profileVideoThumbnail = userData.profileVideoThumbnail;
-    }
-    return m;
-  })();
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [processingOnServer, setProcessingOnServer] = useState(false);
+  /** Media upload starts on mount while user fills step-4 form. */
+  const mediaUploadPromiseRef = useRef(null);
 
   const [Day, setDay] = useState("");
   const [timezone, setTimezone] = useState("");
   const [Year, setYear] = useState("");
   const [From, setFrom] = useState("");
   const [To, setTo] = useState("");
+
+  const mediaUploadErrorMessage = (res) => {
+    const msg = String(res?.message || "");
+    if (msg.includes("ffmpeg") || msg.includes("No such file")) {
+      return "Server could not process your video. Try again, or use a shorter video from your library.";
+    }
+    return msg || "Could not upload media. Please try again.";
+  };
+
+  const pendingForOnboardingUpload = (pending = pendingOnboardingMedia) => {
+    if (!pending || !ONBOARDING_SKIP_VIDEO_UPLOAD) {
+      return pending;
+    }
+    return {
+      profileImage: pending.profileImage,
+      profileVideo: null,
+      galleryVideos: [],
+    };
+  };
+
+  const uploadPendingMedia = async (token) =>
+    dispatch(
+      userActions.completeOnboardingUpload({
+        pending: pendingForOnboardingUpload(),
+        formFields: { isFirstTime: true, deviceToken: token },
+        onProgress: (pe) =>
+          applyUploadProgress(pe, setProgress, setProcessingOnServer),
+      }),
+    ).unwrap();
+
+  const hasPendingMedia = () => {
+    const p = pendingForOnboardingUpload();
+    return Boolean(
+      p?.profileVideo?.uri ||
+        p?.profileImage?.uri ||
+        (p?.galleryVideos && p.galleryVideos.length > 0),
+    );
+  };
 
   useEffect(() => {
     Geolocation.setRNConfiguration({
@@ -55,7 +108,43 @@ const OnBoard4 = (props) => {
       authorizationLevel: "auto"
     })
     Geolocation.requestAuthorization();
-  }, [])
+  }, []);
+
+  useEffect(() => {
+    if (!hasPendingMedia()) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getFcmRegistrationToken();
+        /** Media-only multipart — profile JSON saved on Create Account (avoids niche/q&a multipart 400). */
+        const promise = dispatch(
+          userActions.completeOnboardingUpload({
+            pending: pendingForOnboardingUpload(),
+            formFields: {
+              isFirstTime: true,
+              deviceToken: token,
+            },
+            onProgress: (pe) => {
+              if (!cancelled) {
+                applyUploadProgress(pe, setProgress, setProcessingOnServer);
+              }
+            },
+          }),
+        );
+        mediaUploadPromiseRef.current = promise;
+        await promise.unwrap();
+      } catch (e) {
+        if (!cancelled) {
+          console.warn("[OnBoard4] background media upload", e);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
 
   const CheckLocation = async () => {
@@ -101,94 +190,228 @@ const OnBoard4 = (props) => {
     CreateAccount();
   }
 
+  const buildOnboardingFormFields = (token, location = null) => {
+    const hasAvailability =
+      !!String(Day || "").trim() &&
+      !!String(From || "").trim() &&
+      !!String(To || "").trim() &&
+      !!String(timezone || "").trim();
+    const payload = buildProfileUpdatePayload(userProfile, {
+      email: userProfile?.email
+        ? String(userProfile.email).replace(/\s/g, "")
+        : "no-mail@comesh.com",
+      willingToTravel: values[0].selected == "Yes",
+      showLocation: false,
+      followers: String(values[1].selected),
+      isFirstTime: true,
+      deviceToken: token,
+      ...(location ? location : {}),
+      ...(hasAvailability
+        ? {
+            availabilityFrom: `${Day} ${From}`,
+            availabilityTo: `${Day} ${To}`,
+            timeZone: timezone,
+          }
+        : {}),
+    });
+    logOnboardingPayload('buildOnboardingFormFields', payload);
+    return payload;
+  };
+
+  const finishOnboardingNav = (mediaProcessing = false) => {
+    if (mediaProcessing) {
+      Toast.show({
+        type: "info",
+        text1: "Account created",
+        text2: "Your videos are finishing on our servers — you can continue using the app.",
+      });
+    }
+    props.navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "GestureGuide" }],
+      }),
+    );
+  };
+
   const CreateAccount = async (location = null) => {
-    dispatch(setLoader(true))
+    const useMultipart = hasPendingMedia();
+    if (useMultipart) {
+      setUploading(true);
+    } else {
+      dispatch(setLoader(true));
+    }
     try {
-      let token = await getFcmRegistrationToken();
-      const hasAvailability =
-        !!String(Day || "").trim() &&
-        !!String(From || "").trim() &&
-        !!String(To || "").trim() &&
-        !!String(timezone || "").trim();
-      const payload = {
-        ...userProfile,
-        ...mediaFromServer,
-        email: userProfile.email ? userProfile.email.replace(" ", "") : "no-mail@comesh.com",
-        willingToTravel: values[0].selected == 'Yes',
-        showLocation: false,//values[values.length - 1].selected == 'Yes',
-        followers: String(values[1].selected),
-        isFirstTime: true,
-        deviceToken: token,
-        ...location ? location : {},
-      };
-      if (hasAvailability) {
-        payload.availabilityFrom = `${Day} ${From}`;
-        payload.availabilityTo = `${Day} ${To}`;
-        payload.timeZone = timezone;
+      const token = await getFcmRegistrationToken();
+
+      if (!useMultipart) {
+        await dispatch(
+          userActions.UpdateProfile({
+            ...buildOnboardingFormFields(token, location),
+            callback: (data) => {
+              logOnboardingResponse('CreateAccount JSON-only', data);
+              if (data?.success) {
+                finishOnboardingNav(false);
+              } else {
+                Toast.show({
+                  text1: "Error",
+                  text2:
+                    data?.message ||
+                    "Could not create account. Please try again.",
+                  type: "error",
+                });
+              }
+            },
+          }),
+        );
+        return;
       }
 
-      await dispatch(userActions.UpdateProfile({
-        ...payload,
-        callback: (data) => {
-          if (data?.success) {
-            props.navigation.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [
-                  { name: 'GestureGuide' },
-                ],
-              })
-            )
-          } else {
-            Toast.show({
-              text1: "Error",
-              text2: data?.message || "Could not create account. Please try again.",
-              type: "error"
-            });
-          }
+      let mediaProcessing = false;
+      let res = { success: false };
+      if (mediaUploadPromiseRef.current) {
+        try {
+          const uploadResult = await mediaUploadPromiseRef.current.unwrap();
+          res = normalizeUploadResponse(uploadResult);
+          logOnboardingResponse('CreateAccount media upload (background)', res);
+        } catch (e) {
+          res = normalizeUploadResponse(e?.payload || e);
+          logOnboardingResponse('CreateAccount media upload (background)', res);
         }
-      }))
+      }
+      if (!res?.success) {
+        mediaUploadPromiseRef.current = null;
+        try {
+          const uploadResult = await uploadPendingMedia(token);
+          res = normalizeUploadResponse(uploadResult);
+          logOnboardingResponse('CreateAccount media upload (retry)', res);
+        } catch (e) {
+          res = normalizeUploadResponse(e?.payload || e);
+          logOnboardingResponse('CreateAccount media upload (retry)', res);
+        }
+      }
+      if (!res?.success) {
+        Toast.show({
+          text1: "Videos could not upload",
+          text2:
+            mediaUploadErrorMessage(res) +
+            " Your account will be created — add videos later in Edit Profile.",
+          type: "info",
+        });
+      } else {
+        mediaProcessing = isMediaProcessingResponse(res);
+      }
+      completeUploadProgress(setProgress, setProcessingOnServer);
 
+      const profilePayload = buildOnboardingFormFields(token, location);
+      logOnboardingPayload('CreateAccount profile JSON', profilePayload);
+      await dispatch(
+        userActions.UpdateProfile({
+          ...profilePayload,
+          callback: (data) => {
+            logOnboardingResponse('CreateAccount profile JSON', data);
+            if (!data?.success) {
+              Toast.show({
+                text1: "Error",
+                text2:
+                  data?.message || "Could not save profile. Please try again.",
+                type: "error",
+              });
+              return;
+            }
+            finishOnboardingNav(mediaProcessing);
+          },
+        }),
+      );
     } catch (error) {
-      console.warn(error)
-      if (error.message == "login has already been taken")
+      console.warn(error);
+      if (error.message == "login has already been taken") {
         Toast.show({
           text1: "Warning",
           text2: "User is already registered",
-          type: "error"
-        })
+          type: "error",
+        });
+      }
+    } finally {
+      if (useMultipart) {
+        setUploading(false);
+        resetUploadProgress(setProgress, setProcessingOnServer);
+      } else {
+        dispatch(setLoader(false));
+      }
     }
-    dispatch(setLoader(false))
-  }
+  };
 
   const CreateAccountSkip = async () => {
-    dispatch(setLoader(true))
+    const useMultipart = hasPendingMedia();
+    if (useMultipart) {
+      setUploading(true);
+    } else {
+      dispatch(setLoader(true));
+    }
     try {
-      let token = await getFcmRegistrationToken();
-
-
-      await dispatch(userActions.UpdateProfile({
-        ...userProfile,
-        ...mediaFromServer,
-        deviceToken: token,
-        isFirstTime: true,
-        callback: (data) => {
-          props.navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [
-                { name: 'GestureGuide' },
-              ],
-            })
-          )
+      const token = await getFcmRegistrationToken();
+      let mediaProcessing = false;
+      if (useMultipart && mediaUploadPromiseRef.current) {
+        const uploadResult = await mediaUploadPromiseRef.current.unwrap();
+        const res = normalizeUploadResponse(uploadResult);
+        if (!res?.success) {
+          Toast.show({
+            text1: "Error",
+            text2: res?.message || "Could not upload media.",
+            type: "error",
+          });
+          return;
         }
-      }))
+        mediaProcessing = isMediaProcessingResponse(res);
+        completeUploadProgress(setProgress, setProcessingOnServer);
+      } else if (!useMultipart) {
+        await dispatch(
+          userActions.UpdateProfile({
+            ...buildOnboardingFormFields(token),
+            callback: (data) => {
+              if (data?.success) {
+                finishOnboardingNav(false);
+              } else {
+                Toast.show({
+                  text1: "Error",
+                  text2: data?.message || "Could not save profile.",
+                  type: "error",
+                });
+              }
+            },
+          }),
+        );
+        return;
+      }
+      const profilePayload = buildOnboardingFormFields(token);
+      await dispatch(
+        userActions.UpdateProfile({
+          ...profilePayload,
+          callback: (data) => {
+            if (data?.success) {
+              finishOnboardingNav(mediaProcessing);
+            } else {
+              Toast.show({
+                text1: "Error",
+                text2: data?.message || "Could not save profile.",
+                type: "error",
+              });
+            }
+          },
+        }),
+      );
+    } catch (e) {
+      console.warn(e);
+    } finally {
+      if (useMultipart) {
+        setUploading(false);
+        resetUploadProgress(setProgress, setProcessingOnServer);
+      } else {
+        dispatch(setLoader(false));
+      }
     }
-    catch (e) {
-      console.warn(e)
-    }
-    dispatch(setLoader(false))
-  }
+  };
 
 
   return (
@@ -467,6 +690,11 @@ const OnBoard4 = (props) => {
           />
         </View>
       </ScrollView>
+      <UploadProgressOverlay
+        visible={uploading}
+        progress={progress}
+        processingOnServer={processingOnServer}
+      />
     </Container>
   )
 };

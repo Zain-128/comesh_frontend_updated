@@ -28,7 +28,7 @@ function UserSearchRow({ item, onPress }) {
   const thumbSrc = helper.getMediaSource(item.profileVideoThumbnail || item.profileImage || item.profileVideo);
   const showUri = thumbSrc && !imgFail;
   const isFemale = item?.gender?.toLowerCase() === 'female';
-  const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
+  const fallbackAvatar = IMAGES.profileIcon;
 
   return (
     <View style={styles.row}>

@@ -15,10 +15,11 @@ import {
   View
 } from 'react-native';
 import { useImagePickerLock } from "../../../utils/imagePickerSafe";
-import * as Progress from 'react-native-progress';
 import {
   heightPercentageToDP, widthPercentageToDP
 } from 'react-native-responsive-screen';
+import UploadProgressOverlay from '../../../components/UploadProgressOverlay';
+import VideoPickerThumbnail from '../../../components/VideoPickerThumbnail';
 import Toast from 'react-native-toast-message';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Video from "react-native-video";
@@ -35,6 +36,20 @@ import { IMAGES } from "../../../constants/images";
 import userActions from '../../../redux/actions/userActions';
 import { setLoader } from '../../../redux/globalSlice';
 import helper from "../../../utils/helper";
+import { isLocalMediaUri } from '../../../utils/mediaUri';
+import {
+  multiVideoPickerOptions,
+  normalizeVideoAsset,
+  singleVideoPickerOptions,
+} from '../../../utils/videoPickerAsset';
+import { normalizeUploadResponse } from '../../../utils/normalizeUploadResponse';
+import { buildProfileUpdatePayload } from '../../../utils/profileUpdatePayload';
+import {
+  applyUploadProgress,
+  completeUploadProgress,
+  isMediaProcessingResponse,
+  resetUploadProgress,
+} from '../../../utils/uploadProgress';
 import { maxProfileVideos } from "../../../constants/subscriptionEntitlements";
 import { RangeSliderInput } from "../../App/Filter";
 import Header from './Header';
@@ -91,9 +106,9 @@ const EditProfile = props => {
   const [profile_pic, setProfilePic] = useState({
     uri: userData?.profileVideo
   });
-  const [progress, setProgress] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [progressMedia, setProgressMedia] = useState(null);
+  const [progressMedia, setProgressMedia] = useState(0);
+  const [processingOnServer, setProcessingOnServer] = useState(false);
 
   const dispatch = useDispatch();
   const { launchImageLibrary } = useImagePickerLock();
@@ -124,10 +139,9 @@ const EditProfile = props => {
     setQuestions(newData)
   }, [])
 
-  const UpdateAccount = async (videos = []) => {
-    dispatch(setLoader(true))
-    try {
-      await dispatch(userActions.UpdateProfile({
+  const buildEditFormFields = (videos = []) =>
+    buildProfileUpdatePayload(
+      {
         firstName: fname,
         lastName: lname,
         dob: dob.toISOString().split("T")[0],
@@ -138,23 +152,41 @@ const EditProfile = props => {
         socialMediaProfiles: social,
         questionAndAnswers: questions.map((v) => ({
           question: v.Q,
-          answer: v.selected
+          answer: v.selected,
         })),
-        willingToTravel: values[0].selected === 'Yes',
-        showLocation: values[3].selected === 'Yes',
-        followers: values[1].selected + "",
-        availabilityFrom: `${Day} ${From}`,//values[2].selected.toISOString().split("T")[0],
-        availabilityTo: `${Day} ${To}`,//values[2].selected.toISOString().split("T")[0],
-        previousVideos: JSON.stringify(videos),
-        ...!videos?.length ? { emptyVideos: true } : null,
+        willingToTravel: values[0].selected === "Yes",
+        showLocation: values[3].selected === "Yes",
+        followers: String(values[1].selected),
+        availabilityFrom: `${Day} ${From}`,
+        availabilityTo: `${Day} ${To}`,
+        timeZone: Array.isArray(timezone) ? timezone[0] : timezone,
+      },
+      {
+        previousVideos: videos?.length ? videos : undefined,
+        emptyVideos: !videos?.length ? true : undefined,
+      },
+    );
+
+  const UpdateAccount = async (videos = []) => {
+    dispatch(setLoader(true));
+    try {
+      await dispatch(userActions.UpdateProfile({
+        ...buildEditFormFields(videos),
         callback: (data) => {
-          if (data.success) {
+          const res = normalizeUploadResponse(data);
+          if (res.success) {
             Toast.show({
               text1: "Success",
               text2: "You profile has been updated",
-              type: "success"
-            })
+              type: "success",
+            });
             props.navigation.goBack();
+          } else {
+            Toast.show({
+              text1: "Error",
+              text2: res.message || "Could not update profile",
+              type: "error",
+            });
           }
         },
         onProgress: (ev) => {
@@ -162,10 +194,10 @@ const EditProfile = props => {
         }
       }))
     } catch (error) {
-
+      console.warn('[EditProfile] UpdateAccount', error);
+    } finally {
+      dispatch(setLoader(false));
     }
-
-    dispatch(setLoader(false))
   }
 
   const SelectVideo = () => {
@@ -179,14 +211,12 @@ const EditProfile = props => {
       })
       return;
     }
-    launchImageLibrary({
-      mediaType: "video",
-      videoQuality: "medium",
-      selectionLimit: Math.min(5, cap - existing - media.length)
-    }, (response) => {
+    launchImageLibrary(
+      multiVideoPickerOptions(Math.min(5, cap - existing - media.length)),
+      (response) => {
       if (!response?.didCancel && !response?.errorMessage) {
-        const first = response?.assets?.[0];
-        if (!first) {
+        const picked = normalizeVideoAsset(response?.assets?.[0]);
+        if (!picked?.uri) {
           Toast.show({
             text1: "No video selected",
             text2: "Please select a video to continue.",
@@ -194,15 +224,16 @@ const EditProfile = props => {
           });
           return;
         }
-        let video = first;
         setMedia([...media, {
-          name: video.fileName,
-          size: video.fileSize,
-          type: video.type,
-          uri: video.uri,
+          name: picked.fileName,
+          size: picked.fileSize,
+          type: picked.type,
+          uri: picked.uri,
+          thumbnailUri: picked.thumbnailUri,
+          posterUri: picked.posterUri,
         }]);
       }
-    })
+    });
     //     }
     //   }
     // ])
@@ -228,15 +259,10 @@ const EditProfile = props => {
     //   }, {
     //     text: "Library",
     //     onPress: () => {
-    launchImageLibrary({
-      mediaType: "video",
-      quality: 0.7,
-      videoQuality: "medium",
-      selectionLimit: 1
-    }, (response) => {
+    launchImageLibrary(singleVideoPickerOptions(), (response) => {
       if (!response?.didCancel && !response?.errorMessage) {
-        const first = response?.assets?.[0];
-        if (!first) {
+        const video = normalizeVideoAsset(response?.assets?.[0]);
+        if (!video?.uri) {
           Toast.show({
             text1: "No video selected",
             text2: "Please select a video to continue.",
@@ -244,91 +270,145 @@ const EditProfile = props => {
           });
           return;
         }
-        let video = first;
         if (video.duration > 30) {
           Toast.show({
             text1: "Warning",
             text2: "Profile Video must not exceeds limit of 30 seconds",
-            type: "error"
-          })
-        }
-        else {
-          setProfilePic(video);
-          UploadVideo({
+            type: "error",
+          });
+        } else {
+          setProfilePic({
             name: video.fileName,
             size: video.fileSize,
             type: video.type,
             uri: video.uri,
-          })
+            thumbnailUri: video.thumbnailUri,
+            posterUri: video.posterUri,
+          });
         }
       }
-    })
+    });
     //     }
     //   }
     // ])
 
   }
 
-  const UploadVideo = async (video) => {
-    await dispatch(userActions.UploadVideo({
-      video,
-      redirect: true,
-      onProgress: (pe) => {
-        setTimeout(() => {
-          setProgress(pe)
-        }, 1000)
-      },
-      callback: (data) => {
-        let res = JSON.parse(data);
-        console.warn("RESULT OF PROFILE VIDEO", res)
-        if (res.success) {
-          setProgress(null)
-          Toast.show({
-            text1: "Success",
-            text2: "Profile Video has been channged",
-            type: "success"
-          })
+  const handleSave = async () => {
+    const prevVideosPayload = prevMedia?.length
+      ? prevMedia.map((v) => ({ url: v.uri }))
+      : [];
+    const localProfileVideo = isLocalMediaUri(profile_pic?.uri)
+      ? {
+          uri: profile_pic.uri,
+          type: profile_pic.type || "video/mp4",
+          name: profile_pic.fileName || profile_pic.name,
         }
+      : null;
+    const hasNewGallery = media.length > 0;
+    const hasFiles = localProfileVideo || hasNewGallery;
+
+    if (!hasFiles) {
+      UpdateAccount(prevVideosPayload);
+      return;
+    }
+
+    setUploading(true);
+    resetUploadProgress(setProgressMedia, setProcessingOnServer);
+    const profileFields = buildEditFormFields(prevVideosPayload);
+    try {
+      const uploadResult = await dispatch(
+        userActions.saveProfileWithMedia({
+          profileVideo: localProfileVideo,
+          galleryVideos: media,
+          previousVideos: prevVideosPayload.length
+            ? prevVideosPayload
+            : undefined,
+          formFields: {},
+          onProgress: (pe) =>
+            applyUploadProgress(pe, setProgressMedia, setProcessingOnServer),
+        }),
+      ).unwrap();
+      const uploadRes = normalizeUploadResponse(uploadResult);
+      completeUploadProgress(setProgressMedia, setProcessingOnServer);
+      if (!uploadRes.success) {
+        Toast.show({
+          text1: "Error",
+          text2: uploadRes.message || "Could not upload media",
+          type: "error",
+        });
+        return;
       }
-    }))
-  }
 
-  const UploadAndUpdate = async () => {
-    setUploading(true)
-    await dispatch(userActions.UploadProfileMedia({
-      prevMedia: prevMedia?.length ? prevMedia.map((v) => ({ url: v.uri })) : null,
-      video: media,
-      onProgress: (pe) => {
-        setTimeout(() => {
-          setProgressMedia(pe.sent / pe.total)
-        }, 1000)
-      },
-      callback: (data) => {
-        let res = JSON.parse(data);
-        if (res.success) {
-          setUploading(false)
-          setProgress(null)
-          UpdateAccount(res?.data?.videos);
-        }
-        else {
-          Toast.show({
-            text1: "Error",
-            text2: res.message,
-            type: "error"
-          })
-        }
-      }
-    }))
-
-  }
-
+      await dispatch(
+        userActions.UpdateProfile({
+          ...profileFields,
+          callback: (data) => {
+            const res = normalizeUploadResponse(data);
+            if (!res.success) {
+              Toast.show({
+                text1: "Error",
+                text2: res.message || "Could not update profile",
+                type: "error",
+              });
+              return;
+            }
+            if (isMediaProcessingResponse(uploadRes)) {
+              Toast.show({
+                text1: "Saved",
+                text2: "Videos are finishing on our servers.",
+                type: "info",
+              });
+            } else {
+              Toast.show({
+                text1: "Success",
+                text2: "Your profile has been updated",
+                type: "success",
+              });
+            }
+            props.navigation.goBack();
+          },
+        }),
+      );
+    } catch (e) {
+      console.warn("[EditProfile] handleSave", e);
+      Toast.show({
+        text1: "Error",
+        text2: "Upload failed. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setUploading(false);
+      resetUploadProgress(setProgressMedia, setProcessingOnServer);
+    }
+  };
 
   return (
     <AppContainer>
       <ScrollView style={{ flex: 1 }}>
         <Header {...props} />
         <TouchableOpacity onPress={() => SelectProfileVideo()} style={{ height: heightPercentageToDP(40) }}>
-          <Video paused={false} source={profile_pic?.uri ? { uri: profile_pic?.uri } : (userData?.gender?.toLowerCase() === 'female' ? IMAGES.women : IMAGES.men)} resizeMode={'cover'} style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }} />
+          {profile_pic?.uri ? (
+            isLocalMediaUri(profile_pic.uri) ? (
+              <VideoPickerThumbnail
+                asset={profile_pic}
+                style={{ flex: 1, width: '100%' }}
+              />
+            ) : (
+              <Video
+                paused
+                source={{ uri: profile_pic.uri }}
+                resizeMode="cover"
+                style={{ flex: 1, width: '100%', backgroundColor: '#000' }}
+              />
+            )
+          ) : (
+            <Image
+              source={IMAGES.profileIcon}
+              resizeMode="cover"
+              style={{ flex: 1, width: '100%' }}
+            />
+          )}
           <View style={styles.notchView} />
           <TouchableOpacity
             activeOpacity={1}
@@ -342,13 +422,6 @@ const EditProfile = props => {
               }}
             />
           </TouchableOpacity>
-          {
-            progress &&
-            <View style={{ gap: 10, position: "absolute", alignSelf: 'center', left: 0, right: 0, top: 0, bottom: 0, justifyContent: "center", alignItems: 'center', backgroundColor: "rgba(0,0,0,0.6)" }}>
-              <Typography children={'Uploading'} color="#fff" size={20} textType="semiBold" />
-              <Progress.Bar height={10} width={widthPercentageToDP(90)} color={colors.primary} progress={(progress.sent / progress.total * 100) / 100} />
-            </View>
-          }
         </TouchableOpacity>
         <View style={{ flex: 1, padding: "5%", paddingTop: 0 }}>
           <View style={{ flex: 1, gap: heightPercentageToDP(3), marginVertical: 20 }}>
@@ -466,20 +539,25 @@ const EditProfile = props => {
               }
               {
                 media.map((m, i) => {
+                  const thumbStyle = {
+                    borderRadius: 20,
+                    width: widthPercentageToDP(60),
+                    height: widthPercentageToDP(60) / 1.5,
+                    borderColor: "#ddd",
+                    borderWidth: 1,
+                  };
                   return (
                     <View style={{ paddingTop: 10 }}>
-                      <Video
-                        source={{ uri: m.uri }}
-                        paused
-                        controls
-                        style={{
-                          borderRadius: 20,
-                          width: widthPercentageToDP(60),
-                          height: widthPercentageToDP(60) / 1.5,
-                          borderColor: "#ddd",
-                          borderWidth: 1
-                        }}
-                      />
+                      {isLocalMediaUri(m.uri) ? (
+                        <VideoPickerThumbnail asset={m} style={thumbStyle} />
+                      ) : (
+                        <Video
+                          source={{ uri: m.uri }}
+                          paused
+                          controls
+                          style={thumbStyle}
+                        />
+                      )}
                       <TouchableOpacity
                         onPress={() => {
                           let mm = [...media];
@@ -848,34 +926,17 @@ const EditProfile = props => {
             } */}
             <PrimaryButton
               text={'Update & Save'}
-              onPress={() => {
-                if (media.length > 0)
-                  UploadAndUpdate();
-                else
-                  UpdateAccount(prevMedia?.length ? prevMedia.map(v => ({ url: v.uri })) : []);
-              }}
+              onPress={handleSave}
               style={{ marginTop: heightPercentageToDP(3) }}
             />
           </View>
 
         </View >
-        <Modal
+        <UploadProgressOverlay
           visible={uploading}
-          transparent
-          animationType='slide'
-        >
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: 'center', }}>
-            <View style={{ backgroundColor: "#F9F9FC", gap: 20, height: widthPercentageToDP(90), width: widthPercentageToDP(90), borderRadius: 20, justifyContent: "center", alignItems: 'center', }}>
-              <Typography
-                children={"Uploading"}
-                textType='bold'
-                color='#000'
-                size={30}
-              />
-              <Progress.Bar progress={progressMedia} width={widthPercentageToDP(80)} height={10} color={colors.primary} />
-            </View>
-          </View>
-        </Modal>
+          progress={progressMedia}
+          processingOnServer={processingOnServer}
+        />
 
       </ScrollView >
     </AppContainer >

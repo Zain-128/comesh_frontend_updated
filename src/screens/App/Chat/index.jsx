@@ -153,7 +153,7 @@ const Chat = (props) => {
             renderItem={({ item }) => {
               const blurLikes = !canSeeWhoLiked(userData);
               const isFemale = item?.gender?.toLowerCase() === 'female';
-              const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
+              const fallbackAvatar = IMAGES.profileIcon;
               return (
                 <TouchableOpacity onPress={() => props.navigation.navigate('UserProfile', { userID: item?._id })} style={{ width: widthPercentageToDP(25), height: widthPercentageToDP(30), marginBottom: 12 }}>
                   <ImageBackground style={{ flex: 1, overflow: "hidden", alignItems: 'center', justifyContent: "center" }} resizeMode="stretch" source={require("../../../assets/images/likeBorder.png")}>
@@ -243,7 +243,7 @@ const ListItem = ({ item, index, navigation, userData }) => {
     );
   
   const isFemale = peer?.gender?.toLowerCase() === 'female';
-  const fallbackAvatar = isFemale ? IMAGES.women : IMAGES.men;
+  const fallbackAvatar = IMAGES.profileIcon;
 
   const unread = unreadCountForUser(item, userData?._id);
   const listTime =
