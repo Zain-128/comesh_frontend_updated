@@ -14,7 +14,7 @@ export const TIERS = {
 const LIMITS = {
   [TIERS.CREATOR_ACCESS]: {
     maxDailySwipes: 20,
-    maxProfileVideos: 2,
+    maxProfileVideos: 6,
     advancedFilters: false,
     seeWhoLiked: false,
     directMessagingWithoutMatch: false,

@@ -1,8 +1,12 @@
 import { Image as CompressorImage, Video } from "react-native-compressor";
+import {
+  PROFILE_VIDEO_MAX_BYTES,
+  resolveAssetFileSize,
+} from "../constants/videoUploadLimits";
 
 /**
- * Resize + JPEG compress before chat image upload (smaller payload, faster send).
- * Falls back to original uri if compression fails.
+ * Legacy / chat video paths. Prefer singlePhotoPickerOptions() at pick time.
+ * Profile images: picker quality + server sharp (no client compress on upload).
  */
 export async function compressImageForUpload(uri) {
   if (!uri || typeof uri !== "string") return uri;
@@ -22,8 +26,7 @@ export async function compressImageForUpload(uri) {
 }
 
 /**
- * Client-side video compression before upload (primary shrink step).
- * Server runs one ffmpeg pass (MP4 only, no thumbnail extract).
+ * Chat / legacy paths only. Profile videos upload raw; server transcodes once.
  */
 export async function compressVideoForUpload(uri, onProgress) {
   if (!uri) return uri;
@@ -40,6 +43,61 @@ export async function compressVideoForUpload(uri, onProgress) {
     return out || uri;
   } catch (e) {
     console.warn("compressVideoForUpload failed, using original", e);
+    return uri;
+  }
+}
+
+/**
+ * Gallery / profile picks: compress until ≤5MB (auto + manual passes).
+ */
+export async function compressVideoForProfileUpload(uri, onProgress) {
+  if (!uri) return uri;
+  const onProg =
+    typeof onProgress === "function" ? (progress) => onProgress(progress) : undefined;
+
+  const passes = [
+    { compressionMethod: "auto", maxSize: 640, minimumFileSizeForCompress: 0 },
+    { compressionMethod: "auto", maxSize: 480, minimumFileSizeForCompress: 0 },
+    { compressionMethod: "auto", maxSize: 360, minimumFileSizeForCompress: 0 },
+    { compressionMethod: "auto", maxSize: 320, minimumFileSizeForCompress: 0 },
+    {
+      compressionMethod: "manual",
+      maxSize: 360,
+      bitrate: 900_000,
+      stripAudio: true,
+      minimumFileSizeForCompress: 0,
+    },
+    {
+      compressionMethod: "manual",
+      maxSize: 320,
+      bitrate: 650_000,
+      stripAudio: true,
+      minimumFileSizeForCompress: 0,
+    },
+    {
+      compressionMethod: "manual",
+      maxSize: 280,
+      bitrate: 480_000,
+      stripAudio: true,
+      minimumFileSizeForCompress: 0,
+    },
+  ];
+
+  let current = uri;
+  try {
+    for (const opts of passes) {
+      const out = await Video.compress(current, opts, onProg);
+      if (out) {
+        current = out;
+      }
+      const bytes = await resolveAssetFileSize({ uri: current });
+      if (bytes != null && bytes <= PROFILE_VIDEO_MAX_BYTES) {
+        return current;
+      }
+    }
+    return current;
+  } catch (e) {
+    console.warn("compressVideoForProfileUpload failed, using original", e);
     return uri;
   }
 }

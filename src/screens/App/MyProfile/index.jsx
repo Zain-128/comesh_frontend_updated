@@ -1,13 +1,14 @@
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import {
   heightPercentageToDP,
@@ -24,6 +25,67 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import { IMAGES } from '../../../constants/images';
 import helper from "../../../utils/helper";
 
+/** Stop infinite spinners if server background transcode stalls. */
+const MEDIA_PROCESSING_UI_TIMEOUT_MS = 120000;
+
+const galleryVideoStyle = {
+  borderRadius: 20,
+  width: widthPercentageToDP(70),
+  height: widthPercentageToDP(70) / 1.25,
+  backgroundColor: "#1a1a1a",
+};
+
+function GalleryVideoCell({ item, profileImage }) {
+  const [failed, setFailed] = useState(false);
+  const posterUri = helper.videoPosterUrl(
+    item?.thumbnailUrl,
+    item?.url,
+    profileImage,
+  );
+  const source =
+    helper.getMediaSource(item?.url) || {
+      uri: helper.resolveMediaUrl(item?.url),
+    };
+
+  if (failed) {
+    if (posterUri) {
+      return (
+        <Image
+          source={helper.getMediaSourceOrUri(posterUri) ?? { uri: posterUri }}
+          resizeMode="cover"
+          style={galleryVideoStyle}
+        />
+      );
+    }
+    return (
+      <View
+        style={[
+          galleryVideoStyle,
+          { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f3f3" },
+        ]}>
+        <Typography children="Video unavailable" color="#939393" size={12} />
+      </View>
+    );
+  }
+
+  return (
+    <Video
+      source={source}
+      poster={posterUri || undefined}
+      posterResizeMode="cover"
+      resizeMode="cover"
+      repeat
+      muted
+      paused
+      controls
+      playInBackground={false}
+      playWhenInactive={false}
+      onError={() => setFailed(true)}
+      style={galleryVideoStyle}
+    />
+  );
+}
+
 const MyProfile = props => {
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -32,18 +94,82 @@ const MyProfile = props => {
   const dispatch = useDispatch();
   const { userData } = useSelector(state => state.user);
 
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!userData || !Object.keys(userData).length) {
+      console.log("[MyProfile] userData: (empty)");
+      return;
+    }
+    console.log("[MyProfile] userData", {
+      _id: userData._id,
+      email: userData.email,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      displayName:
+        [userData.firstName, userData.lastName].filter(Boolean).join(" ").trim() ||
+        userData.fullName,
+      profileImage: userData.profileImage,
+      profileVideo: userData.profileVideo,
+      profileVideoThumbnail: userData.profileVideoThumbnail,
+      mediaProcessing: userData.mediaProcessing,
+      videosCount: Array.isArray(userData.videos) ? userData.videos.length : 0,
+      videos: userData.videos,
+      niche: userData.niche,
+      followers: userData.followers,
+      willingToTravel: userData.willingToTravel,
+      showLocation: userData.showLocation,
+      availabilityFrom: userData.availabilityFrom,
+      availabilityTo: userData.availabilityTo,
+      timeZone: userData.timeZone,
+      isFirstTime: userData.isFirstTime,
+      subscriptionTier: userData.subscriptionTier,
+      hasDeviceToken: Boolean(userData.deviceToken),
+    });
+  }, [userData]);
+
+  const refreshProfile = useCallback(() => {
+    const id = userData?._id;
+    if (!id) return;
+    dispatch(userActions.GetMyProfile(id));
+  }, [dispatch, userData?._id]);
+
   useFocusEffect(
     useCallback(() => {
-      const id = userData?._id;
-      if (!id) return;
-
-      dispatch(userActions.GetMyProfile(id));
-    }, [dispatch, userData?._id])
+      refreshProfile();
+    }, [refreshProfile])
   );
 
-  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    if (!userData?.mediaProcessing || !userData?._id) {
+      return undefined;
+    }
+    const id = setInterval(() => {
+      refreshProfile();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [userData?.mediaProcessing, userData?._id, refreshProfile]);
+
+  const [paused, setPaused] = useState(false);
   const [profileVideoFailed, setProfileVideoFailed] = useState(false);
+  const [bannerVideoReady, setBannerVideoReady] = useState(false);
+  const [mediaProcessingTimedOut, setMediaProcessingTimedOut] = useState(false);
   const navigation = useNavigation();
+
+  useEffect(() => {
+    if (!userData?.mediaProcessing) {
+      setMediaProcessingTimedOut(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setMediaProcessingTimedOut(true);
+    }, MEDIA_PROCESSING_UI_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [userData?.mediaProcessing, userData?.updatedAt]);
+
+  useEffect(() => {
+    setBannerVideoReady(false);
+    setProfileVideoFailed(false);
+  }, [userData?.profileVideo]);
 
   const displayName =
     [userData?.firstName, userData?.lastName].filter(Boolean).join(" ").trim() ||
@@ -53,17 +179,28 @@ const MyProfile = props => {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
-      setPaused(true)
+      setPaused(true);
     });
     const unsubscribed = navigation.addListener('focus', () => {
-      setPaused(false)
+      setPaused(false);
     });
 
     return () => {
       unsubscribe();
       unsubscribed();
-    }
+    };
   }, [navigation]);
+
+  const mediaStillProcessing =
+    Boolean(userData?.mediaProcessing) && !mediaProcessingTimedOut;
+
+  const isBannerVideoProcessing =
+    mediaStillProcessing && !userData?.profileVideo;
+
+  const isBannerVideoBuffering =
+    Boolean(userData?.profileVideo) &&
+    !profileVideoFailed &&
+    !bannerVideoReady;
 
   const getAvailability = () => {
     if (!userData?.availabilityFrom || !userData?.availabilityTo) return "";
@@ -84,7 +221,7 @@ const MyProfile = props => {
   return (
     <AppContainer>
       <ScrollView style={{ flex: 1 }}>
-        <View style={{ height: heightPercentageToDP(50), position: 'relative' }}>
+        <View style={{ height: heightPercentageToDP(50), position: 'relative', overflow: 'hidden' }}>
           <View
             style={{
               position: 'absolute',
@@ -125,30 +262,90 @@ const MyProfile = props => {
             </View>
           </View>
 
-          {userData?.profileVideo && !profileVideoFailed ? (
-            <Video
-              paused={paused}
-              repeat={true}
-              muted
-              playInBackground={false}
-              playWhenInactive={false}
-              source={helper.getMediaSource(userData?.profileVideo) || { uri: helper.resolveMediaUrl(userData?.profileVideo) }}
-              poster={helper.resolveMediaUrl(userData?.profileVideoThumbnail || userData?.profileImage) || undefined}
-              posterResizeMode="cover"
-              onError={() => setProfileVideoFailed(true)}
-              resizeMode='cover'
-              style={{ flex: 1, width: '100%', resizeMode: 'cover', backgroundColor: "#000" }}
-            />
+          {isBannerVideoProcessing ? (
+            <View style={styles.bannerLoading}>
+              {userData?.profileImage ? (
+                <Image
+                  source={helper.getMediaSourceOrUri(userData.profileImage)}
+                  resizeMode="cover"
+                  style={[StyleSheet.absoluteFillObject, styles.bannerLoadingBg]}
+                />
+              ) : null}
+              <View style={styles.bannerLoadingOverlay}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Typography
+                  children="Processing your video…"
+                  color="#fff"
+                  size={15}
+                  textType="medium"
+                  style={{ marginTop: 12, textAlign: 'center' }}
+                />
+                <Typography
+                  children="This usually takes a few seconds"
+                  color="rgba(255,255,255,0.75)"
+                  size={12}
+                  style={{ marginTop: 6, textAlign: 'center' }}
+                />
+              </View>
+            </View>
+          ) : userData?.profileVideo && !profileVideoFailed ? (
+            <View style={styles.bannerVideoWrap}>
+              <Video
+                paused={paused}
+                repeat
+                muted
+                playInBackground={false}
+                playWhenInactive={false}
+                source={
+                  helper.getMediaSource(userData.profileVideo) || {
+                    uri: helper.resolveMediaUrl(userData.profileVideo),
+                  }
+                }
+                poster={helper.profileBannerPosterUrl(userData) || undefined}
+                posterResizeMode="cover"
+                onLoad={() => setBannerVideoReady(true)}
+                onReadyForDisplay={() => setBannerVideoReady(true)}
+                onError={() => setProfileVideoFailed(true)}
+                resizeMode="cover"
+                style={StyleSheet.absoluteFillObject}
+              />
+              {isBannerVideoBuffering ? (
+                <View style={styles.bannerLoadingOverlay} pointerEvents="none">
+                  {userData?.profileImage ? (
+                    <Image
+                      source={helper.getMediaSourceOrUri(userData.profileImage)}
+                      resizeMode="cover"
+                      style={[StyleSheet.absoluteFillObject, styles.bannerLoadingBg]}
+                    />
+                  ) : null}
+                  <ActivityIndicator size="large" color="#fff" />
+                </View>
+              ) : null}
+            </View>
           ) : (
             <Image
               source={
-                helper.getMediaSourceOrUri(userData?.profileImage || userData?.profileVideoThumbnail) ??
-                IMAGES.profileIcon
+                helper.getMediaSourceOrUri(
+                  userData?.profileImage || userData?.profileVideoThumbnail,
+                ) ?? IMAGES.profileIcon
               }
               resizeMode="cover"
-              style={{ flex: 1, width: "100%", backgroundColor: "#000" }}
+              style={{ flex: 1, width: '100%', backgroundColor: '#000' }}
             />
           )}
+          {mediaProcessingTimedOut && userData?.mediaProcessing ? (
+            <View style={styles.processingStaleBanner}>
+              <Typography
+                children="Videos are still processing on the server."
+                color="#fff"
+                size={13}
+                style={{ textAlign: 'center' }}
+              />
+              <TouchableOpacity onPress={refreshProfile} style={styles.processingStaleBtn}>
+                <Typography children="Tap to refresh" color="#fff" size={12} textType="semiBold" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {userData?.profileImage ? (
             <View style={styles.heroAvatarWrap} accessibilityLabel="Profile photo">
               <Image
@@ -292,22 +489,51 @@ const MyProfile = props => {
                 flexDirection: 'row',
                 marginTop: 10,
               }}>
-              {userData?.videos && userData?.videos.map(i => (
-                <Video
-                  source={helper.getMediaSource(i.url) || { uri: helper.resolveMediaUrl(i.url) }}
-                  poster={helper.videoPosterUrl(i.thumbnailUrl, i.url, userData?.profileImage) || undefined}
-                  posterResizeMode="cover"
-                  muted
-                  paused
-                  controls
-                  style={{
-                    borderRadius: 20,
-                    width: widthPercentageToDP(70),
-                    height: widthPercentageToDP(70) / 1.25,
-                    backgroundColor: "#eee"
-                  }}
+              {mediaStillProcessing &&
+              (!userData?.videos || userData.videos.length === 0) ? (
+                <View style={styles.mediaLoadingCard}>
+                  <ActivityIndicator color="#042AFF" />
+                  <Typography
+                    children="Loading gallery videos…"
+                    color="#939393"
+                    size={13}
+                    style={{ marginTop: 8 }}
+                  />
+                </View>
+              ) : null}
+              {userData?.videos && userData.videos.length > 0
+                ? userData.videos.map((i, idx) => (
+                <GalleryVideoCell
+                  key={i?.url ? `${i.url}-${idx}` : `gallery-${idx}`}
+                  item={i}
+                  profileImage={userData?.profileImage}
                 />
-              ))}
+              ))
+                : !mediaStillProcessing ? (
+                  <View>
+                    <Typography
+                      children={
+                        mediaProcessingTimedOut
+                          ? "Videos did not finish processing. Add them again in Edit Profile."
+                          : "No gallery videos yet."
+                      }
+                      color="#939393"
+                      size={13}
+                    />
+                    {mediaProcessingTimedOut ? (
+                      <TouchableOpacity
+                        onPress={() => props.navigation.navigate("EditProfile")}
+                        style={{ marginTop: 8 }}>
+                        <Typography
+                          children="Open Edit Profile"
+                          color="#042AFF"
+                          size={13}
+                          textType="semiBold"
+                        />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
             </ScrollView>
           </View>
 
@@ -417,6 +643,54 @@ const styles = StyleSheet.create({
   heroAvatarImg: {
     width: '100%',
     height: '100%',
+  },
+  bannerVideoWrap: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#111',
+  },
+  bannerLoading: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#111',
+    overflow: 'hidden',
+  },
+  bannerLoadingBg: {
+    opacity: 0.35,
+  },
+  bannerLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  mediaLoadingCard: {
+    width: widthPercentageToDP(70),
+    height: widthPercentageToDP(70) / 1.25,
+    borderRadius: 20,
+    backgroundColor: '#f3f3f3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  processingStaleBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 32,
+    zIndex: 3,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  processingStaleBtn: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#042AFF',
   },
   profileContent: {
     minHeight: heightPercentageToDP(50),

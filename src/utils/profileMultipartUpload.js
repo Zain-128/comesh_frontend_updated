@@ -1,7 +1,5 @@
 import RNFetchBlob from 'react-native-blob-util';
 import { logMultipartTextParts } from './onboardingApiDebug';
-import { compressImageForUpload, compressVideoForUpload } from './compressMedia';
-
 const wrapLocalFile = (fileUri) =>
   RNFetchBlob.wrap(
     decodeURIComponent(String(fileUri)).replace('file://', ''),
@@ -23,19 +21,14 @@ function uniqueUploadFilename(role, index, uri, fallbackName, ext) {
   return `${role}${suffix}_${stamp}_${stem}.${ext}`;
 }
 
-function dedupeGalleryVideos(profileVideo, galleryVideos = []) {
-  const profileUri = profileVideo?.uri
-    ? String(profileVideo.uri)
-    : null;
+/** Drop duplicate URIs within gallery only — profile video may match gallery (both still upload). */
+function dedupeGalleryVideos(_profileVideo, galleryVideos = []) {
   const seen = new Set();
   return galleryVideos.filter((vid) => {
     if (!vid?.uri) {
       return false;
     }
     const u = String(vid.uri);
-    if (profileUri && u === profileUri) {
-      return false;
-    }
     if (seen.has(u)) {
       return false;
     }
@@ -55,48 +48,49 @@ export async function buildProfileMultipartParts({
   const gallery = dedupeGalleryVideos(profileVideo, galleryVideos);
 
   if (profileImage?.uri) {
-    const imgCompressed = await compressImageForUpload(profileImage.uri);
-    const imgUri = imgCompressed || profileImage.uri;
     parts.push({
       name: 'profileImage',
-      filename: uniqueUploadFilename('profile_image', null, imgUri, 'avatar', 'jpg'),
-      type: 'image/jpeg',
-      data: wrapLocalFile(imgUri),
+      filename: uniqueUploadFilename(
+        'profile_image',
+        null,
+        profileImage.uri,
+        profileImage.name || profileImage.fileName,
+        'jpg',
+      ),
+      type: profileImage.type || 'image/jpeg',
+      data: wrapLocalFile(profileImage.uri),
     });
   }
 
   if (profileVideo?.uri) {
-    const compressedUri = await compressVideoForUpload(profileVideo.uri);
-    const uri = compressedUri || profileVideo.uri;
     parts.push({
       name: 'profileVideo',
       filename: uniqueUploadFilename(
         'profile_video',
         null,
-        uri,
+        profileVideo.uri,
         profileVideo.name || profileVideo.fileName,
         'mp4',
       ),
       type: profileVideo.type || 'video/mp4',
-      data: wrapLocalFile(uri),
+      data: wrapLocalFile(profileVideo.uri),
     });
   }
 
   if (gallery.length) {
     for (let i = 0; i < gallery.length; i++) {
       const vid = gallery[i];
-      const outUri = (await compressVideoForUpload(vid.uri)) || vid.uri;
       parts.push({
         name: 'videos',
         filename: uniqueUploadFilename(
           'gallery',
           i,
-          outUri,
+          vid.uri,
           vid.name || vid.fileName,
           'mp4',
         ),
         type: vid.type || 'video/mp4',
-        data: wrapLocalFile(outUri),
+        data: wrapLocalFile(vid.uri),
       });
     }
   }

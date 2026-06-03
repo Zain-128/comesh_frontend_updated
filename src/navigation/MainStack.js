@@ -10,8 +10,13 @@ import OnBoardStack from './OnboardingStack';
 const Stack = createNativeStackNavigator();
 
 const MainStack = () => {
-  const { isLogin, isFirstTime, userData } = useSelector(state => state.user);
-  return isLogin ? isFirstTime ? <OnBoardStack /> : <HomeStack /> : <AuthStack />;
+  const { isLogin, postSignupFlowComplete } = useSelector((state) => state.user);
+  /** Home only after Gesture Guide + Subscription (not when server sets isFirstTime false). */
+  return isLogin
+    ? postSignupFlowComplete
+      ? <HomeStack />
+      : <OnBoardStack />
+    : <AuthStack />;
 };
 
 export default MainStack;

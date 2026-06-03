@@ -34,7 +34,6 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import colors from "../../../constants/colors";
 import { IMAGES } from "../../../constants/images";
 import userActions from '../../../redux/actions/userActions';
-import { setLoader } from '../../../redux/globalSlice';
 import helper from "../../../utils/helper";
 import { isLocalMediaUri } from '../../../utils/mediaUri';
 import {
@@ -51,6 +50,10 @@ import {
   resetUploadProgress,
 } from '../../../utils/uploadProgress';
 import { maxProfileVideos } from "../../../constants/subscriptionEntitlements";
+import {
+  PROFILE_VIDEO_LIMITS_LABEL,
+  validateProfileVideoPick,
+} from '../../../constants/videoUploadLimits';
 import { RangeSliderInput } from "../../App/Filter";
 import Header from './Header';
 
@@ -168,7 +171,6 @@ const EditProfile = props => {
     );
 
   const UpdateAccount = async (videos = []) => {
-    dispatch(setLoader(true));
     try {
       await dispatch(userActions.UpdateProfile({
         ...buildEditFormFields(videos),
@@ -177,7 +179,7 @@ const EditProfile = props => {
           if (res.success) {
             Toast.show({
               text1: "Success",
-              text2: "You profile has been updated",
+              text2: "Your profile has been updated",
               type: "success",
             });
             props.navigation.goBack();
@@ -189,14 +191,9 @@ const EditProfile = props => {
             });
           }
         },
-        onProgress: (ev) => {
-          console.warn(ev)
-        }
-      }))
+      }));
     } catch (error) {
       console.warn('[EditProfile] UpdateAccount', error);
-    } finally {
-      dispatch(setLoader(false));
     }
   }
 
@@ -220,6 +217,15 @@ const EditProfile = props => {
           Toast.show({
             text1: "No video selected",
             text2: "Please select a video to continue.",
+            type: "error",
+          });
+          return;
+        }
+        const check = validateProfileVideoPick(picked);
+        if (!check.valid) {
+          Toast.show({
+            text1: "Video not allowed",
+            text2: check.message || `Use a clip ${PROFILE_VIDEO_LIMITS_LABEL}.`,
             type: "error",
           });
           return;
@@ -270,10 +276,11 @@ const EditProfile = props => {
           });
           return;
         }
-        if (video.duration > 30) {
+        const check = validateProfileVideoPick(video);
+        if (!check.valid) {
           Toast.show({
-            text1: "Warning",
-            text2: "Profile Video must not exceeds limit of 30 seconds",
+            text1: "Video not allowed",
+            text2: check.message || `Use a clip ${PROFILE_VIDEO_LIMITS_LABEL}.`,
             type: "error",
           });
         } else {

@@ -15,6 +15,8 @@ const userSlice = createSlice({
     fcmDeviceToken: "",
     /** Local picks during onboarding — one upload on final step. */
     pendingOnboardingMedia: null,
+    /** False until Gesture Guide + Subscription finish after Create Account. */
+    postSignupFlowComplete: false,
   },
   reducers: {
     setFcmDeviceToken(state, action) {
@@ -23,6 +25,9 @@ const userSlice = createSlice({
     },
     setFirstTime(state, action) {
       state.isFirstTime = action.payload;
+    },
+    setPostSignupFlowComplete(state, action) {
+      state.postSignupFlowComplete = Boolean(action.payload);
     },
     setUser(state, action) {
       state.userRegister = {
@@ -51,6 +56,7 @@ const userSlice = createSlice({
     },
     logoutUser(state, action) {
       state.isFirstTime = true;
+      state.postSignupFlowComplete = false;
       state.isLogin = false;
       state.userData = null;
       state.userRegister = null;
@@ -61,6 +67,7 @@ const userSlice = createSlice({
       state.userData = null;
       state.isLogin = false;
       state.isFirstTime = true;
+      state.postSignupFlowComplete = false;
       state.token = "";
       state.fcmDeviceToken = "";
       state.pendingOnboardingMedia = null;
@@ -106,7 +113,13 @@ const userSlice = createSlice({
     });
     builder.addCase(userActions.GetMyProfile.fulfilled, (state, action) => {
       if (action.payload?.success && action.payload?.data) {
-        state.userData = action.payload.data;
+        state.userData = { ...state.userData, ...action.payload.data };
+        if (
+          action.payload.data.isFirstTime === false &&
+          state.postSignupFlowComplete
+        ) {
+          state.isFirstTime = false;
+        }
       }
     });
     builder.addCase(globalActions.likeUser.fulfilled, (state, action) => {
@@ -134,6 +147,8 @@ const userSlice = createSlice({
                 ? d.isFirstTime
                 : true;
           state.token = action.payload.token;
+          /** New signups stay in onboarding stack until tutorial + subscription. */
+          state.postSignupFlowComplete = state.isFirstTime === false;
         }
       }
     });
@@ -145,18 +160,13 @@ const userSlice = createSlice({
       });
     });
     builder.addCase(userActions.UpdateProfile.fulfilled, (state, action) => {
-      if (action.payload) {
-        if (action.payload.success) {
-          state.userData = action.payload.data;
-          /** API puts flag on `data` (user); root `isFirstTime` only when thunk merges it. */
-          const p = action.payload;
-          const fromRoot = p.isFirstTime;
-          const fromUser = p.data?.isFirstTime;
-          if (typeof fromRoot === "boolean") {
-            state.isFirstTime = fromRoot;
-          } else if (typeof fromUser === "boolean") {
-            state.isFirstTime = fromUser;
-          }
+      if (action.payload?.success && action.payload?.data) {
+        state.userData = { ...state.userData, ...action.payload.data };
+        if (
+          action.payload.data.isFirstTime === false &&
+          state.postSignupFlowComplete
+        ) {
+          state.isFirstTime = false;
         }
       }
     });
@@ -197,15 +207,14 @@ const userSlice = createSlice({
     builder.addCase(userActions.completeOnboardingUpload.fulfilled, (state, action) => {
       const p = action.payload;
       if (p?.success && p?.data) {
-        state.userData = p.data;
+        const { isFirstTime: _serverFirstTime, ...restData } = p.data || {};
+        state.userData = {
+          ...state.userData,
+          ...restData,
+          mediaProcessing:
+            p.mediaProcessing ?? p.data.mediaProcessing ?? state.userData?.mediaProcessing,
+        };
         state.pendingOnboardingMedia = null;
-        const fromRoot = p.isFirstTime;
-        const fromUser = p.data?.isFirstTime;
-        if (typeof fromRoot === "boolean") {
-          state.isFirstTime = fromRoot;
-        } else if (typeof fromUser === "boolean") {
-          state.isFirstTime = fromUser;
-        }
       }
     });
     builder.addCase(userActions.saveProfileWithMedia.fulfilled, (state, action) => {
@@ -221,6 +230,7 @@ export const {
   setUser,
   logoutUser,
   setFirstTime,
+  setPostSignupFlowComplete,
   setFcmDeviceToken,
   updateUserLikes,
   resetVerfiy,

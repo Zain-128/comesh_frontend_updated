@@ -57,10 +57,6 @@ export function buildProfileUpdatePayload(source = {}, overrides = {}) {
     'availabilityFrom',
     'availabilityTo',
     'timeZone',
-    'latitude',
-    'longitude',
-    'lat',
-    'lng',
     'emptyVideos',
   ];
 
@@ -69,6 +65,11 @@ export function buildProfileUpdatePayload(source = {}, overrides = {}) {
       payload[key] = merged[key];
     }
   });
+
+  if (payload.followers !== undefined && payload.followers !== null) {
+    const n = Number(payload.followers);
+    payload.followers = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  }
 
   if (merged.email != null) {
     payload.email = String(merged.email).replace(/\s/g, '');

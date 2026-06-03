@@ -10,7 +10,6 @@ import colors from '../../constants/colors';
 
 const GestureGuide = () => {
   const navigation = useNavigation();
-
   const onLeaveTutorial = () => {
     navigation.navigate('PostOnboardingSubscription');
   };

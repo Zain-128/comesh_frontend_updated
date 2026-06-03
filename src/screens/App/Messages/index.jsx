@@ -27,7 +27,7 @@ import { IMAGES } from "../../../constants/images";
 import Actions from "../../../redux/actions/globalActions";
 import { AppendNewMessage } from "../../../redux/globalSlice";
 import helper from "../../../utils/helper";
-import { compressImageForUpload } from "../../../utils/compressMedia";
+import { singlePhotoPickerOptions } from "../../../utils/videoPickerAsset";
 import chatSocket from "../../../utils/chatSocket";
 
 const androidOsRelease = Platform.OS === "android" ? Number(Platform.constants?.Release) || 0 : 99;
@@ -362,18 +362,13 @@ const Messages = (props) => {
     setSendingMedia(true);
     const caption = value.trim() || "Photo";
     let uploadUri = asset.uri;
-    try {
-      uploadUri = await compressImageForUpload(asset.uri);
-      if (
-        Platform.OS === "android" &&
-        uploadUri &&
-        !uploadUri.startsWith("file://") &&
-        !uploadUri.startsWith("content://")
-      ) {
-        uploadUri = `file://${uploadUri}`;
-      }
-    } catch {
-      uploadUri = asset.uri;
+    if (
+      Platform.OS === "android" &&
+      uploadUri &&
+      !uploadUri.startsWith("file://") &&
+      !uploadUri.startsWith("content://")
+    ) {
+      uploadUri = `file://${uploadUri}`;
     }
     const safeName = (() => {
       const n = asset.fileName || asset.uri?.split("/").pop() || "chat.jpg";
@@ -414,24 +409,13 @@ const Messages = (props) => {
     }
   };
 
-  const pickerPhotoOptions = {
-    mediaType: "photo",
-    selectionLimit: 1,
-    maxWidth: 2048,
-    maxHeight: 2048,
-    quality: 0.8,
-  };
-
   const pickGalleryPhoto = () => {
-    launchImageLibrary(pickerPhotoOptions, onPickedAsset);
+    launchImageLibrary(singlePhotoPickerOptions(), onPickedAsset);
   };
   const takeCameraPhoto = () => {
     launchCamera(
       {
-        mediaType: "photo",
-        maxWidth: 2048,
-        maxHeight: 2048,
-        quality: 0.8,
+        ...singlePhotoPickerOptions(),
         saveToPhotos: false,
       },
       onPickedAsset

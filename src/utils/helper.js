@@ -63,12 +63,32 @@ const getMediaSource = (input) => {
 /** Use for any `{ uri: helper.resolveMediaUrl(...) }` — forwards ngrok header when needed. */
 const getMediaSourceOrUri = (input) => getMediaSource(input) || undefined;
 
-/** Video poster: legacy thumb → compressed MP4 → avatar (no server ffmpeg thumbnail). */
+/** ImageKit: instant JPEG poster from MP4 (faster than loading full video). */
+const imagekitVideoPosterUrl = (videoUrl) => {
+  const base = resolveMediaUrl(videoUrl);
+  if (!base || !base.includes("imagekit.io")) {
+    return "";
+  }
+  const clean = base.split("?")[0];
+  if (clean.endsWith(".jpg") || clean.endsWith(".jpeg")) {
+    return clean;
+  }
+  return `${clean}/ik-thumbnail.jpg`;
+};
+
+/** Video poster: thumb → ImageKit frame → profile image. */
 const videoPosterUrl = (thumbnailUrl, videoUrl, fallbackImage) =>
   resolveMediaUrl(thumbnailUrl) ||
-  resolveMediaUrl(videoUrl) ||
+  imagekitVideoPosterUrl(videoUrl) ||
   resolveMediaUrl(fallbackImage) ||
   "";
+
+const profileBannerPosterUrl = (user) =>
+  videoPosterUrl(
+    user?.profileVideoThumbnail,
+    user?.profileVideo,
+    user?.profileImage,
+  );
 
 export default {
   FollowersPrefix,
@@ -77,4 +97,6 @@ export default {
   getMediaSource,
   getMediaSourceOrUri,
   videoPosterUrl,
+  imagekitVideoPosterUrl,
+  profileBannerPosterUrl,
 };

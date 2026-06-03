@@ -22,7 +22,7 @@ import endPoints from '../../../constants/endPoints';
 import Toast from 'react-native-toast-message';
 import {useDispatch, useSelector} from 'react-redux';
 import userActions from '../../../redux/actions/userActions';
-import {setFirstTime} from '../../../redux/userSlice';
+import {setFirstTime, setPostSignupFlowComplete} from '../../../redux/userSlice';
 import {
   SUBSCRIPTION_PLANS_DEFINITION,
   SUBSCRIPTION_PAYWALL_FOOTNOTE,
@@ -815,7 +815,10 @@ const Subscription = props => {
     });
   }, [fromOnboarding, route.name, route.params]);
 
-  const finishOnboarding = () => dispatch(setFirstTime(false));
+  const finishOnboarding = () => {
+    dispatch(setPostSignupFlowComplete(true));
+    dispatch(setFirstTime(false));
+  };
   const leaveScreen = () => {
     if (fromOnboarding) {
       finishOnboarding();

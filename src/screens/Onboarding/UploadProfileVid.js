@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   Modal,
@@ -16,10 +16,15 @@ import PrimaryButton from '../../components/Buttons/PrimaryButton';
 import Container from '../../components/Container';
 import Text from '../../components/Text';
 import colors from '../../constants/colors';
-import { setPendingOnboardingMedia } from '../../redux/userSlice';
+import { setPendingOnboardingMedia, setPostSignupFlowComplete } from '../../redux/userSlice';
 import VideoPickerThumbnail from '../../components/VideoPickerThumbnail';
 import {
+  PROFILE_VIDEO_LIMITS_LABEL,
+  validateProfileVideoPick,
+} from '../../constants/videoUploadLimits';
+import {
   normalizeVideoAsset,
+  singlePhotoPickerOptions,
   singleVideoPickerOptions,
 } from '../../utils/videoPickerAsset';
 
@@ -42,11 +47,12 @@ const UploadProfileVid = (props) => {
   const dispatch = useDispatch();
   const { launchImageLibrary } = useImagePickerLock();
 
+  useEffect(() => {
+    dispatch(setPostSignupFlowComplete(false));
+  }, [dispatch]);
+
   const SelectAvatar = () => {
-    launchImageLibrary({
-      mediaType: "photo",
-      selectionLimit: 1,
-    }, (response) => {
+    launchImageLibrary(singlePhotoPickerOptions(), (response) => {
       if (response.didCancel || response.errorMessage) return;
       const asset = response.assets?.[0];
       if (!asset?.uri) return;
@@ -90,10 +96,11 @@ const UploadProfileVid = (props) => {
         if (!video?.uri) {
           return;
         }
-        if (video.duration > 30) {
+        const check = validateProfileVideoPick(video);
+        if (!check.valid) {
           Toast.show({
-            text1: "Warning",
-            text2: "Profile Video must not exceeds limit of 30 seconds",
+            text1: "Video too large",
+            text2: check.message || `Use a clip ${PROFILE_VIDEO_LIMITS_LABEL}.`,
             type: "error",
           });
         } else {
@@ -222,7 +229,7 @@ const UploadProfileVid = (props) => {
                 </Text>
                 <Text style={{ color: colors.textLight, textAlign: "center" }}>
                   This video will be shown as your profile video. Tap to choose
-                  a clip (max 30 seconds).
+                  a clip ({PROFILE_VIDEO_LIMITS_LABEL}).
                 </Text>
               </View>
             </TouchableOpacity>

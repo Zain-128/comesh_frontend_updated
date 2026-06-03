@@ -181,9 +181,8 @@ const UpdateProfile = createAsyncThunk(
         httpStatus: result.status,
       });
       callback(result.data);
-      return data.isFirstTime
-        ? { ...result.data, isFirstTime: data.isFirstTime }
-        : result.data;
+      /** Never force isFirstTime true from client — backend sets false when profile completes. */
+      return result.data;
     } catch (error) {
       console.warn("updateProfile", error);
       let eRes = error?.response?.data;
@@ -269,9 +268,14 @@ async function runProfileMultipartUpload(data, fileOpts, thunkAPI) {
     typeof resp.text === "function" ? await resp.text() : resp.data;
   const parsed = parseUploadJsonBody(raw);
   if (status >= 400) {
+    let message = parsed?.message || `Upload failed (HTTP ${status})`;
+    if (status === 502 || status === 504) {
+      message =
+        "Server timed out (502). Large uploads can overload the server — wait a minute and check My Profile, or retry with fewer/smaller videos.";
+    }
     const merged = {
       success: false,
-      message: parsed?.message || `Upload failed (HTTP ${status})`,
+      message,
       ...parsed,
     };
     logOnboardingResponse("multipart PUT error", merged, { httpStatus: status });

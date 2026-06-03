@@ -1,7 +1,7 @@
 import Geolocation from "@react-native-community/geolocation";
 import { getFcmRegistrationToken } from "../../push/fcmToken";
 import { CommonActions } from "@react-navigation/native";
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import UploadProgressOverlay from '../../components/UploadProgressOverlay';
 import Toast from "react-native-toast-message";
@@ -13,6 +13,7 @@ import RadioButton from '../../components/RadioButton';
 import Text from '../../components/Text';
 import userActions from '../../redux/actions/userActions';
 import { setLoader } from '../../redux/globalSlice';
+import { setPostSignupFlowComplete } from '../../redux/userSlice';
 import helper from "../../utils/helper";
 import { normalizeUploadResponse } from '../../utils/normalizeUploadResponse';
 import {
@@ -26,14 +27,11 @@ import {
   logOnboardingResponse,
 } from '../../utils/onboardingApiDebug';
 import { buildProfileUpdatePayload } from '../../utils/profileUpdatePayload';
+import { maxProfileVideos } from '../../constants/subscriptionEntitlements';
 import { RangeSliderInput } from "../App/Filter";
 
-/**
- * Render is still on old server code (ffmpeg `-preset fast`, filename collisions).
- * Onboarding uploads avatar only; videos after deploy via Edit Profile.
- * Set to `false` once Render deploys latest `comesh_app_backend` main.
- */
-const ONBOARDING_SKIP_VIDEO_UPLOAD = true;
+/** Profile videos upload on Create Account only (not on mount — avoids early Home jump). */
+const ONBOARDING_SKIP_VIDEO_UPLOAD = false;
 
 const data = [
   { Q: "Are you willing to travel?", options: ["Yes", "No"], selected: "Yes" },
@@ -54,7 +52,7 @@ const OnBoard4 = (props) => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processingOnServer, setProcessingOnServer] = useState(false);
-  /** Media upload starts on mount while user fills step-4 form. */
+  /** Set when user taps Create Account / Skip (no upload on mount). */
   const mediaUploadPromiseRef = useRef(null);
 
   const [Day, setDay] = useState("");
@@ -63,8 +61,18 @@ const OnBoard4 = (props) => {
   const [From, setFrom] = useState("");
   const [To, setTo] = useState("");
 
+  const countPendingVideos = (pending = pendingOnboardingMedia) => {
+    const p = pendingForOnboardingUpload(pending);
+    return (
+      (p?.profileVideo?.uri ? 1 : 0) + (p?.galleryVideos?.length || 0)
+    );
+  };
+
   const mediaUploadErrorMessage = (res) => {
     const msg = String(res?.message || "");
+    if (msg.includes("allows up to") || msg.includes("allows only")) {
+      return `${msg} You can add more later in Edit Profile after upgrading, or use fewer clips now (1 profile + up to 5 gallery).`;
+    }
     if (msg.includes("ffmpeg") || msg.includes("No such file")) {
       return "Server could not process your video. Try again, or use a shorter video from your library.";
     }
@@ -82,15 +90,52 @@ const OnBoard4 = (props) => {
     };
   };
 
-  const uploadPendingMedia = async (token) =>
-    dispatch(
+  /** Returns Redux thunk promise (use `.unwrap()` or `resolveMediaUploadResult`). */
+  const dispatchOnboardingMediaUpload = (token, progressHandler) => {
+    const pending = pendingForOnboardingUpload();
+    const cap = maxProfileVideos(userProfile);
+    const total = countPendingVideos(pendingOnboardingMedia);
+    if (total > cap) {
+      const err = {
+        success: false,
+        message: `Your plan allows up to ${cap} videos (you selected ${total}). Remove extra clips on step 3 or upgrade.`,
+      };
+      Toast.show({
+        type: "error",
+        text1: "Too many videos",
+        text2: err.message,
+      });
+      return Promise.reject(err);
+    }
+    return dispatch(
       userActions.completeOnboardingUpload({
-        pending: pendingForOnboardingUpload(),
-        formFields: { isFirstTime: true, deviceToken: token },
-        onProgress: (pe) =>
-          applyUploadProgress(pe, setProgress, setProcessingOnServer),
+        pending,
+        formFields: { deviceToken: token },
+        onProgress: (pe) => {
+          if (typeof progressHandler === "function") {
+            progressHandler(pe);
+          } else {
+            applyUploadProgress(pe, setProgress, setProcessingOnServer);
+          }
+        },
       }),
-    ).unwrap();
+    );
+  };
+
+  const resolveMediaUploadResult = async (uploadPromise) => {
+    if (!uploadPromise) {
+      return { success: false, message: "No upload in progress" };
+    }
+    try {
+      const payload =
+        typeof uploadPromise.unwrap === "function"
+          ? await uploadPromise.unwrap()
+          : await uploadPromise;
+      return normalizeUploadResponse(payload);
+    } catch (e) {
+      return normalizeUploadResponse(e?.payload || e);
+    }
+  };
 
   const hasPendingMedia = () => {
     const p = pendingForOnboardingUpload();
@@ -110,41 +155,10 @@ const OnBoard4 = (props) => {
     Geolocation.requestAuthorization();
   }, []);
 
-  useEffect(() => {
-    if (!hasPendingMedia()) {
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getFcmRegistrationToken();
-        /** Media-only multipart — profile JSON saved on Create Account (avoids niche/q&a multipart 400). */
-        const promise = dispatch(
-          userActions.completeOnboardingUpload({
-            pending: pendingForOnboardingUpload(),
-            formFields: {
-              isFirstTime: true,
-              deviceToken: token,
-            },
-            onProgress: (pe) => {
-              if (!cancelled) {
-                applyUploadProgress(pe, setProgress, setProcessingOnServer);
-              }
-            },
-          }),
-        );
-        mediaUploadPromiseRef.current = promise;
-        await promise.unwrap();
-      } catch (e) {
-        if (!cancelled) {
-          console.warn("[OnBoard4] background media upload", e);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  /** Before paint: stay on onboarding stack until tutorial + subscription. */
+  useLayoutEffect(() => {
+    dispatch(setPostSignupFlowComplete(false));
+  }, [dispatch]);
 
 
   const CheckLocation = async () => {
@@ -202,8 +216,7 @@ const OnBoard4 = (props) => {
         : "no-mail@comesh.com",
       willingToTravel: values[0].selected == "Yes",
       showLocation: false,
-      followers: String(values[1].selected),
-      isFirstTime: true,
+      followers: Number(values[1].selected) || 0,
       deviceToken: token,
       ...(location ? location : {}),
       ...(hasAvailability
@@ -219,6 +232,7 @@ const OnBoard4 = (props) => {
   };
 
   const finishOnboardingNav = (mediaProcessing = false) => {
+    dispatch(setPostSignupFlowComplete(false));
     if (mediaProcessing) {
       Toast.show({
         type: "info",
@@ -268,28 +282,12 @@ const OnBoard4 = (props) => {
       }
 
       let mediaProcessing = false;
-      let res = { success: false };
-      if (mediaUploadPromiseRef.current) {
-        try {
-          const uploadResult = await mediaUploadPromiseRef.current.unwrap();
-          res = normalizeUploadResponse(uploadResult);
-          logOnboardingResponse('CreateAccount media upload (background)', res);
-        } catch (e) {
-          res = normalizeUploadResponse(e?.payload || e);
-          logOnboardingResponse('CreateAccount media upload (background)', res);
-        }
-      }
-      if (!res?.success) {
-        mediaUploadPromiseRef.current = null;
-        try {
-          const uploadResult = await uploadPendingMedia(token);
-          res = normalizeUploadResponse(uploadResult);
-          logOnboardingResponse('CreateAccount media upload (retry)', res);
-        } catch (e) {
-          res = normalizeUploadResponse(e?.payload || e);
-          logOnboardingResponse('CreateAccount media upload (retry)', res);
-        }
-      }
+      const uploadPromise = dispatchOnboardingMediaUpload(token, (pe) =>
+        applyUploadProgress(pe, setProgress, setProcessingOnServer),
+      );
+      mediaUploadPromiseRef.current = uploadPromise;
+      let res = await resolveMediaUploadResult(uploadPromise);
+      logOnboardingResponse('CreateAccount media upload', res);
       if (!res?.success) {
         Toast.show({
           text1: "Videos could not upload",
@@ -352,9 +350,12 @@ const OnBoard4 = (props) => {
     try {
       const token = await getFcmRegistrationToken();
       let mediaProcessing = false;
-      if (useMultipart && mediaUploadPromiseRef.current) {
-        const uploadResult = await mediaUploadPromiseRef.current.unwrap();
-        const res = normalizeUploadResponse(uploadResult);
+      if (useMultipart) {
+        const uploadPromise = dispatchOnboardingMediaUpload(token, (pe) =>
+          applyUploadProgress(pe, setProgress, setProcessingOnServer),
+        );
+        mediaUploadPromiseRef.current = uploadPromise;
+        const res = await resolveMediaUploadResult(uploadPromise);
         if (!res?.success) {
           Toast.show({
             text1: "Error",
