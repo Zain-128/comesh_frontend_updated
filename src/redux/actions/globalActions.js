@@ -3,15 +3,18 @@ import Toast from "react-native-toast-message";
 import endPoints from "../../constants/endPoints";
 import apiRequest from "../../utils/apiRequest";
 import { compressImageForUpload, compressVideoForUpload } from "../../utils/compressMedia";
+import { sanitizeDiscoveryFilters } from "../../constants/subscriptionEntitlements";
 
 const DashboardListing = createAsyncThunk(
   "general/Dashboard",
   async (data, thunkAPI) => {
     try {
+      const user = thunkAPI.getState()?.user?.userData;
+      const params = sanitizeDiscoveryFilters(data?.params, user);
       let result = await apiRequest.post(
         endPoints.Dashboard + `?page=${data?.page}`,
         {
-          ...data.params,
+          ...params,
         }
       );
       data.callback(result.data);
@@ -191,6 +194,30 @@ const unLikeUser = createAsyncThunk("general/unLikeUser", async (data, thunkAPI)
         text2: error.message,
       });
     }
+  }
+});
+
+const rewindUser = createAsyncThunk("general/rewindUser", async (data, thunkAPI) => {
+  try {
+    const result = await apiRequest.get(endPoints.Rewind);
+    data?.callback?.(result.data);
+    return result.data;
+  } catch (error) {
+    const eRes = error?.response?.data;
+    if (eRes) {
+      Toast.show({
+        type: "error",
+        text1: eRes.error,
+        text2: eRes.message,
+      });
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+      });
+    }
+    return thunkAPI.rejectWithValue(error);
   }
 });
 
@@ -675,6 +702,7 @@ export default {
   reportUser,
   likeUser,
   unLikeUser,
+  rewindUser,
   getStaticContent,
   DeactivateAccount,
   GetChats,

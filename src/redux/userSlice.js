@@ -45,6 +45,14 @@ const userSlice = createSlice({
           likedByMe: [...new Set([...likedByMe, action.payload.userId])],
           unLikedByMe: arr,
         };
+      } else if (action.payload.type === "rewind") {
+        const uid = action.payload.userId;
+        state.userData = {
+          ...state.userData,
+          unLikedByMe: unLikedByMe.filter(
+            (i) => String(i) !== String(uid),
+          ),
+        };
       } else {
         let arr = likedByMe.filter((i) => i !== action.payload.userId);
         state.userData = {
@@ -113,7 +121,27 @@ const userSlice = createSlice({
     });
     builder.addCase(userActions.GetMyProfile.fulfilled, (state, action) => {
       if (action.payload?.success && action.payload?.data) {
-        state.userData = { ...state.userData, ...action.payload.data };
+        const incoming = action.payload.data;
+        const keepIfEmpty = (key) => {
+          const next = incoming[key];
+          const prev = state.userData?.[key];
+          if (
+            (next === undefined ||
+              next === null ||
+              String(next).trim() === "") &&
+            prev != null &&
+            String(prev).trim() !== ""
+          ) {
+            return prev;
+          }
+          return next;
+        };
+        state.userData = {
+          ...state.userData,
+          ...incoming,
+          firstName: keepIfEmpty("firstName"),
+          lastName: keepIfEmpty("lastName"),
+        };
         if (
           action.payload.data.isFirstTime === false &&
           state.postSignupFlowComplete
@@ -125,6 +153,16 @@ const userSlice = createSlice({
     builder.addCase(globalActions.likeUser.fulfilled, (state, action) => {
       if (action.payload?.success && action.payload?.data) {
         state.userData = { ...state.userData, ...action.payload.data };
+      }
+    });
+    builder.addCase(globalActions.rewindUser.fulfilled, (state, action) => {
+      if (action.payload?.success && action.payload?.data?._id) {
+        const uid = action.payload.data._id;
+        const unLikedByMe = state.userData?.unLikedByMe || [];
+        state.userData = {
+          ...state.userData,
+          unLikedByMe: unLikedByMe.filter((i) => String(i) !== String(uid)),
+        };
       }
     });
     builder.addCase(userActions.VerifyIosSubscription.fulfilled, (state, action) => {

@@ -92,7 +92,7 @@ const MyProfile = props => {
   }, []);
 
   const dispatch = useDispatch();
-  const { userData } = useSelector(state => state.user);
+  const { userData, userRegister } = useSelector(state => state.user);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -172,10 +172,9 @@ const MyProfile = props => {
   }, [userData?.profileVideo]);
 
   const displayName =
-    [userData?.firstName, userData?.lastName].filter(Boolean).join(" ").trim() ||
-    userData?.fullName ||
-    userData?.email ||
-    "";
+    helper.getUserDisplayName(userData) ||
+    helper.getUserDisplayName(userRegister) ||
+    "My Profile";
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
@@ -594,7 +593,11 @@ const MyProfile = props => {
               /> */}
               <Input
                 editable={false}
-                value={userData?.email}
+                value={
+                  helper.isInternalPlaceholderEmail(userData?.email)
+                    ? ""
+                    : userData?.email || ""
+                }
                 placeholder="Your Email Address"
                 leftImage={require('../../../assets/images/email.png')}
               />

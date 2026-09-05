@@ -47,6 +47,9 @@ const globalSlice = createSlice({
     emptyDashData(state, action) {
       state.dashboard = { data: [] };
     },
+    clearOthersProfile(state) {
+      state.othersProfile = null;
+    },
     AppendNewMessage(state, action) {
       const prev = state.messages?.data ?? [];
       const incoming = action.payload;
@@ -297,6 +300,7 @@ export const {
   setDashLoader,
   AppendNewMessage,
   emptyDashData,
+  clearOthersProfile,
   setNoInternet,
 } = globalSlice.actions;
 export default globalSlice.reducer;

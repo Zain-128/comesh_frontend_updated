@@ -24,15 +24,16 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import colors from '../../../constants/colors';
 import { IMAGES } from '../../../constants/images';
 import globalActions from '../../../redux/actions/globalActions';
-import {
-  effectiveTier,
-  swipeLimitReached,
-  swipesRemainingLabel,
-  TIERS,
-} from '../../../constants/subscriptionEntitlements';
-import { setLoader } from '../../../redux/globalSlice';
-import { updateUserLikes } from '../../../redux/userSlice';
+import { canOpenChatWithUser } from '../../../constants/subscriptionEntitlements';
+import { setLoader, clearOthersProfile } from '../../../redux/globalSlice';
 import helper from '../../../utils/helper';
+import { userIdInList } from '../../../utils/matchHelpers';
+import {
+  openChatWithPeer,
+  performLike,
+  performSuperLike,
+  performUnlike,
+} from '../../../utils/likeMessagingActions';
 
 const Profile = props => {
   useEffect(() => {
@@ -40,12 +41,13 @@ const Profile = props => {
   }, []);
 
   const { userData } = useSelector((state) => state.user);
-  const { othersProfile } = useSelector((state) => state.globalState);
+  const { othersProfile, chats } = useSelector((state) => state.globalState);
   const [profileVideoFailed, setProfileVideoFailed] = React.useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchFailed, setFetchFailed] = useState(false);
   const dispatch = useDispatch();
   const routeUserId = props.route.params?.userID;
+  const prefillName = props.route.params?.prefillName;
   const profileMatches =
     othersProfile && routeUserId && String(othersProfile._id) === String(routeUserId);
 
@@ -58,6 +60,7 @@ const Profile = props => {
     }
     setLoading(true);
     setFetchFailed(false);
+    dispatch(clearOthersProfile());
     dispatch(setLoader(true));
     try {
       await dispatch(globalActions.GetOthersProfile({ userId: uid })).unwrap();
@@ -76,71 +79,42 @@ const Profile = props => {
   );
 
   const otherDisplayName =
-    [othersProfile?.firstName, othersProfile?.lastName].filter(Boolean).join(" ").trim() ||
+    helper.getUserDisplayName(profileMatches ? othersProfile : null) ||
+    prefillName ||
     "Comesh User";
 
-  const Like = async (userId) => {
-    if (swipeLimitReached(userData)) {
-      Toast.show({
-        type: "info",
-        text1: "Daily limit",
-        text2: `${swipesRemainingLabel(userData)}. Upgrade to Collab Pro for unlimited swipes.`,
-      });
-      return;
-    }
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.likeUser({
+  const otherUserId = profileMatches ? othersProfile?._id : null;
+  const showMessageAction =
+    otherUserId != null && canOpenChatWithUser(userData, otherUserId);
+
+  const openChatWithUser = () =>
+    openChatWithPeer({
+      dispatch,
+      navigation: props.navigation,
+      userData,
+      chats,
+      peerUserId: otherUserId,
+    });
+
+  const Like = (userId) =>
+    performLike({
+      dispatch,
+      userData,
       userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({ userId, type: "like" }))
-          dispatch(globalActions.GetChats({ callback: () => { } }));
-          dispatch(globalActions.getLikesUsers({ callback: () => { } }));
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
+      navigation: props.navigation,
+      chats,
+    });
 
-  }
+  const unLike = (userId) =>
+    performUnlike({ dispatch, userId });
 
-  const unLike = async (userId) => {
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.unLikeUser({
+  const SuperLike = (userId) =>
+    performSuperLike({
+      dispatch,
+      userData,
       userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({ userId, type: "unlike" }))
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
-
-  }
-
-  const SuperLike = async (userId) => {
-    if (effectiveTier(userData) === TIERS.CREATOR_ACCESS) {
-      Toast.show({
-        type: 'info',
-        text1: 'Collab Pro',
-        text2: 'Super like is available on Collab Pro and above.',
-      });
-      return;
-    }
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.SuperLikeUser({
-      userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({ userId, type: "like" }))
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
-
-  }
+      navigation: props.navigation,
+    });
 
   const getAvailability = () => {
     if (!othersProfile?.availabilityFrom || !othersProfile?.availabilityTo) return "";
@@ -257,13 +231,13 @@ const Profile = props => {
             <TouchableOpacity
               onPress={() => Like(othersProfile?._id)}
               style={styles.actionBtn}>
-              <AdIcon name={userData?.likedByMe?.includes(othersProfile?._id) ? 'like1' : 'like2'} size={26} color={colors.primary} />
+              <AdIcon name={userIdInList(userData?.likedByMe, othersProfile?._id) ? 'like1' : 'like2'} size={26} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => unLike(othersProfile?._id)}
             >
               <View style={styles.actionBtn}>
-                <AdIcon name={userData?.unLikedByMe?.includes(othersProfile?._id) ? 'dislike1' : 'dislike2'} size={26} color={colors.primary} />
+                <AdIcon name={userIdInList(userData?.unLikedByMe, othersProfile?._id) ? 'dislike1' : 'dislike2'} size={26} color={colors.primary} />
               </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => {
@@ -272,6 +246,20 @@ const Profile = props => {
               <View style={styles.actionBtn}>
                 <AdIcon name={'staro'} size={26} color={colors.primary} />
               </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={openChatWithUser}
+              style={[
+                styles.actionBtn,
+                !showMessageAction && styles.actionBtnDisabled,
+              ]}
+              accessibilityLabel="Send message"
+            >
+              <AdIcon
+                name="message1"
+                size={26}
+                color={showMessageAction ? colors.primary : '#B0B0B0'}
+              />
             </TouchableOpacity>
             {/* <View style={styles.actionBtn}>
               <AdIcon name={'banckward'} size={26} color={colors.primary} />
@@ -594,6 +582,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     bottom: 3,
     zIndex: 2,
+  },
+  actionBtnDisabled: {
+    opacity: 0.85,
   },
   actionBtn: {
     width: 65,

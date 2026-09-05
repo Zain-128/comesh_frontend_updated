@@ -18,7 +18,13 @@ import globalActions from '../../../redux/actions/globalActions';
 import { setDashLoader } from '../../../redux/globalSlice';
 import helper from '../../../utils/helper';
 import Header from './Header';
-import { hasAdvancedFilters } from '../../../constants/subscriptionEntitlements';
+import {
+  discoveryRadiusSliderMax,
+  hasAdvancedFilters,
+  maxLocalMatchMiles,
+  sanitizeDiscoveryFilters,
+  upgradePlanHint,
+} from '../../../constants/subscriptionEntitlements';
 import Label from './slider/Label';
 import Notch from './slider/Notch';
 import Rail from './slider/Rail';
@@ -33,6 +39,8 @@ const Filter = props => {
   const dispatch = useDispatch();
   const { userData } = useSelector((s) => s.user);
   const showAdvanced = hasAdvancedFilters(userData);
+  const radiusSliderMax = discoveryRadiusSliderMax(userData);
+  const mileCap = maxLocalMatchMiles(userData);
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
@@ -42,7 +50,7 @@ const Filter = props => {
     dispatch(setDashLoader(true))
     await dispatch(globalActions.DashboardListing({
       page: 1,
-      params: filter,
+      params: sanitizeDiscoveryFilters(filter, userData),
       callback: (data) => {
       }
     }));
@@ -62,15 +70,28 @@ const Filter = props => {
             })
           }
         }} />
-        <RangeSliderInput val={filter?.minDistance ? filter?.minDistance : 0} valH={filter?.maxDistance ? filter?.maxDistance : 100} label={'Location Range'} valueLabel='miles' handleValueChange={(low, high, byUser) => {
+        <RangeSliderInput
+          val={filter?.minDistance ? filter?.minDistance : 0}
+          valH={filter?.maxDistance ? filter?.maxDistance : radiusSliderMax}
+          label={'Location Range'}
+          valueLabel='miles'
+          max={radiusSliderMax}
+          handleValueChange={(low, high, byUser) => {
           if (byUser) {
+            const cappedHigh =
+              mileCap != null ? Math.min(high, mileCap) : high;
             setFilter({
               ...filter,
               minDistance: low,
-              maxDistance: high
+              maxDistance: cappedHigh
             })
           }
         }} />
+        {mileCap != null ? (
+          <Text style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>
+            Creator Access: up to {mileCap} miles. Upgrade to {upgradePlanHint('advancedFilters')} for nationwide matching.
+          </Text>
+        ) : null}
         {showAdvanced ? (
         <RangeSliderInput val={filter?.minFollowers ? filter?.minFollowers : 0} valH={filter?.maxFollowers ? filter?.maxFollowers : 10000000} label={'Followers Range'} max={10000000} handleValueChange={(low, high, byUser) => {
           if (byUser) {
@@ -83,7 +104,7 @@ const Filter = props => {
         }} />
         ) : (
           <Text style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>
-            Follower filters unlock on Collab Pro and above.
+            Follower filters unlock on {upgradePlanHint('advancedFilters')} and above.
           </Text>
         )}
 

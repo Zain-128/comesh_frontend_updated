@@ -49,7 +49,11 @@ import {
   isMediaProcessingResponse,
   resetUploadProgress,
 } from '../../../utils/uploadProgress';
-import { maxProfileVideos } from "../../../constants/subscriptionEntitlements";
+import {
+  canChangeLocation,
+  maxProfileVideos,
+  upgradePlanHint,
+} from "../../../constants/subscriptionEntitlements";
 import {
   PROFILE_VIDEO_LIMITS_LABEL,
   validateProfileVideoPick,
@@ -76,7 +80,9 @@ const EditProfile = props => {
   const { userData } = useSelector(state => state.user)
   const [fname, setFname] = useState(userData?.firstName);
   const [lname, setLname] = useState(userData?.lastName);
-  const [email, setEmail] = useState(userData?.email);
+  const [email, setEmail] = useState(
+    helper.isInternalPlaceholderEmail(userData?.email) ? "" : userData?.email,
+  );
   const [dob, setDOB] = useState(userData?.dob ? new Date(userData?.dob) : new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [iosDraftDate, setIosDraftDate] = useState(() =>
@@ -498,16 +504,29 @@ const EditProfile = props => {
                 </Pressable>
               </Modal>
             ) : null}
-            <Input
-              value={location}
-              onChangeText={(text) => { setLocation(text) }}
-              placeholder='Location'
-              leftImage={require("../../../assets/images/location.png")}
-            // onFocus={() => {
-            //   Keyboard.dismiss();
-            //   props.navigation.navigate("Maps")
-            // }} 
-            />
+            {canChangeLocation(userData) ? (
+              <Input
+                value={location}
+                onChangeText={(text) => setLocation(text)}
+                editable
+                placeholder="Location"
+                leftImage={require("../../../assets/images/location.png")}
+              />
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => props.navigation.navigate("Subscription")}
+              >
+                <View pointerEvents="none">
+                  <Input
+                    value={location}
+                    editable={false}
+                    placeholder={`Upgrade to ${upgradePlanHint("location")} to change location`}
+                    leftImage={require("../../../assets/images/location.png")}
+                  />
+                </View>
+              </TouchableOpacity>
+            )}
             <Typography children={'About Me'} textType='bold' size={17} />
             <Input multiline value={about} onChangeText={(text) => { setAbout(text) }} placeholder='About' height={heightPercentageToDP(20)} />
             <Typography children={'Media'} textType='bold' size={17} />

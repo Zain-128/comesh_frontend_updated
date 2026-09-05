@@ -31,6 +31,7 @@ import {
   sumGalleryVideoBytes,
   validateProfileVideoPick,
 } from '../../constants/videoUploadLimits';
+import { maxProfileVideos } from '../../constants/subscriptionEntitlements';
 
 const galleryVideoLimits = { maxBytes: ONBOARDING_GALLERY_VIDEO_MAX_BYTES };
 import {
@@ -38,11 +39,13 @@ import {
   normalizeVideoAssets,
 } from '../../utils/videoPickerAsset';
 
-const MAX_GALLERY_VIDEOS = 5;
-
 const OnBoard3 = (props) => {
   const dispatch = useDispatch();
   const userRegister = useSelector((state) => state.user.userRegister);
+  const userData = useSelector((state) => state.user.userData);
+  const videoCap = maxProfileVideos(userData || userRegister || {});
+  /** Step 1 keeps one profile video; gallery count = plan cap minus that slot. */
+  const MAX_GALLERY_VIDEOS = Math.max(0, videoCap - 1);
   const pendingOnboardingMedia = useSelector(
     (state) => state.user.pendingOnboardingMedia,
   );

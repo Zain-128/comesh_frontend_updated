@@ -71,7 +71,7 @@ const OnBoard4 = (props) => {
   const mediaUploadErrorMessage = (res) => {
     const msg = String(res?.message || "");
     if (msg.includes("allows up to") || msg.includes("allows only")) {
-      return `${msg} You can add more later in Edit Profile after upgrading, or use fewer clips now (1 profile + up to 5 gallery).`;
+      return `${msg} You can add more later in Edit Profile after upgrading, or use fewer clips now.`;
     }
     if (msg.includes("ffmpeg") || msg.includes("No such file")) {
       return "Server could not process your video. Try again, or use a shorter video from your library.";

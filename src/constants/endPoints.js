@@ -25,6 +25,7 @@ export default endPoints = {
   Report: "/report-user",
   Like: "/users/likeUser",
   Unlike: "/users/unLikeUser",
+  Rewind: "/users/rewind",
   superLike: "/users/superLikeUser",
   StaticContent: (type) => `/static-content/${type}`,
   DeactiveAccount: "/users/deactive",

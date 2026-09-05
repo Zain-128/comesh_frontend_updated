@@ -17,6 +17,36 @@ const sentenceCase = (text) => {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
 };
 
+/** Synthetic emails for phone-only accounts — never show as display name. */
+const isInternalPlaceholderEmail = (email) => {
+  const e = String(email ?? "").trim();
+  if (!e) return false;
+  return /@comesh\.phone$/i.test(e) || /^phone-\d+@/i.test(e);
+};
+
+/** True for synthetic phone-login emails and any normal email — never show as a name. */
+const looksLikeEmail = (value) => {
+  const s = String(value ?? "").trim();
+  if (!s) return false;
+  if (isInternalPlaceholderEmail(s)) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+};
+
+/**
+ * Human-readable name for profile headers, lists, chat.
+ * Never surfaces email addresses as display names.
+ */
+const getUserDisplayName = (user, fallback = "Comesh User") => {
+  if (!user || typeof user !== "object") return fallback;
+  const first = String(user.firstName ?? "").trim();
+  const last = String(user.lastName ?? "").trim();
+  const combined = [first, last].filter(Boolean).join(" ").trim();
+  if (combined && !looksLikeEmail(combined)) return combined;
+  const full = String(user.fullName ?? user.name ?? "").trim();
+  if (full && !looksLikeEmail(full)) return full;
+  return fallback;
+};
+
 const resolveMediaUrl = (input) => {
   if (!input) return "";
   let value = String(input).trim();
@@ -93,6 +123,8 @@ const profileBannerPosterUrl = (user) =>
 export default {
   FollowersPrefix,
   sentenceCase,
+  getUserDisplayName,
+  isInternalPlaceholderEmail,
   resolveMediaUrl,
   getMediaSource,
   getMediaSourceOrUri,

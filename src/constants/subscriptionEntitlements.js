@@ -1,50 +1,22 @@
 /**
- * Mirrors backend `TIER_LIMITS` (comesh-backend-/src/entitlements/subscription-tier.ts).
- * Used for UI hints; server enforces all limits.
+ * Plan limits from SUBSCRIPTION_PLANS_DEFINITION / PLAN_CAPABILITIES (subscriptionProducts.js).
+ * Server enforces the same caps in comesh-backend-/src/users/subscription-tier.ts.
  */
 
+import {
+  PLAN_CAPABILITIES,
+  PLAN_IDS,
+  capabilitiesForPlanId,
+} from './subscriptionProducts';
+
 export const TIERS = {
-  CREATOR_ACCESS: 'creator_access',
-  COLLAB_PRO: 'collab_pro',
-  CREATOR_PASSPORT: 'creator_passport',
-  CREATOR_ELITE: 'creator_elite',
+  CREATOR_ACCESS: PLAN_IDS.CREATOR_ACCESS,
+  COLLAB_PRO: PLAN_IDS.COLLAB_PRO,
+  CREATOR_PASSPORT: PLAN_IDS.CREATOR_PASSPORT,
+  CREATOR_ELITE: PLAN_IDS.CREATOR_ELITE,
 };
 
-/** Mirrors `TIER_LIMITS` in `comesh-backend-/src/users/subscription-tier.ts`. */
-const LIMITS = {
-  [TIERS.CREATOR_ACCESS]: {
-    maxDailySwipes: 20,
-    maxProfileVideos: 6,
-    advancedFilters: false,
-    seeWhoLiked: false,
-    directMessagingWithoutMatch: false,
-    maxLocalMatchMiles: 50,
-  },
-  [TIERS.COLLAB_PRO]: {
-    maxDailySwipes: null,
-    maxProfileVideos: 10,
-    advancedFilters: true,
-    seeWhoLiked: true,
-    directMessagingWithoutMatch: false,
-    maxLocalMatchMiles: null,
-  },
-  [TIERS.CREATOR_PASSPORT]: {
-    maxDailySwipes: null,
-    maxProfileVideos: 10,
-    advancedFilters: true,
-    seeWhoLiked: true,
-    directMessagingWithoutMatch: false,
-    maxLocalMatchMiles: null,
-  },
-  [TIERS.CREATOR_ELITE]: {
-    maxDailySwipes: null,
-    maxProfileVideos: 10,
-    advancedFilters: true,
-    seeWhoLiked: true,
-    directMessagingWithoutMatch: true,
-    maxLocalMatchMiles: null,
-  },
-};
+const LIMITS = PLAN_CAPABILITIES;
 
 export function effectiveTier(user) {
   const raw = user?.subscriptionTier || TIERS.CREATOR_ACCESS;
@@ -60,7 +32,7 @@ export function effectiveTier(user) {
 }
 
 export function tierLimits(user) {
-  return LIMITS[effectiveTier(user)] || LIMITS[TIERS.CREATOR_ACCESS];
+  return capabilitiesForPlanId(effectiveTier(user));
 }
 
 export function maxProfileVideos(user) {
@@ -75,15 +47,71 @@ export function hasAdvancedFilters(user) {
   return tierLimits(user).advancedFilters;
 }
 
-/** Creator Elite — message before mutual connection (server also enforces on `createSingleChat`). */
+export function canUseSuperLike(user) {
+  return Boolean(tierLimits(user).canUseSuperLike);
+}
+
+export function canChangeLocation(user) {
+  return Boolean(tierLimits(user).canChangeLocation);
+}
+
+export function hasAnalyticsAccess(user) {
+  return Boolean(tierLimits(user).analytics);
+}
+
+/** Creator Elite — message without mutual match (server enforces on createSingleChat). */
 export function canDirectMessageWithoutMatch(user) {
   return Boolean(tierLimits(user).directMessagingWithoutMatch);
 }
 
-/** `null` = nationwide / no hard cap in app; number = max discovery radius in miles for free tier. */
+/** Show message action on profile when mutual match or Elite Direct Connect. */
+export function canOpenChatWithUser(user, otherUserId) {
+  if (!otherUserId) return false;
+  if (canDirectMessageWithoutMatch(user)) return true;
+  const likedByMe = user?.likedByMe || [];
+  const likedBySomeone = user?.likedBySomeone || [];
+  const id = String(otherUserId);
+  return (
+    likedByMe.some((x) => String(x) === id) &&
+    likedBySomeone.some((x) => String(x) === id)
+  );
+}
+
+/** `null` = nationwide; number = max discovery radius in miles (Creator Access: 50). */
 export function maxLocalMatchMiles(user) {
   const v = tierLimits(user).maxLocalMatchMiles;
   return v === undefined ? null : v;
+}
+
+/** Max value for location filter slider (miles). */
+export function discoveryRadiusSliderMax(user) {
+  const cap = maxLocalMatchMiles(user);
+  return cap == null ? 100 : cap;
+}
+
+/**
+ * Clamp dashboard/filter payload to the user's plan before API calls.
+ */
+export function sanitizeDiscoveryFilters(params, user) {
+  if (!params || typeof params !== 'object') return params ?? {};
+  const out = { ...params };
+  const mileCap = maxLocalMatchMiles(user);
+
+  if (mileCap != null) {
+    if (out.maxDistance != null) {
+      out.maxDistance = Math.min(Number(out.maxDistance) || mileCap, mileCap);
+    }
+    if (out.minDistance != null) {
+      out.minDistance = Math.min(Number(out.minDistance) || 0, mileCap);
+    }
+  }
+
+  if (!hasAdvancedFilters(user)) {
+    delete out.minFollowers;
+    delete out.maxFollowers;
+  }
+
+  return out;
 }
 
 export function swipeLimitReached(user) {
@@ -102,4 +130,17 @@ export function swipesRemainingLabel(user) {
     user?.swipeDayUtc === day ? Number(user?.swipeCountDay) || 0 : 0;
   const left = Math.max(0, L.maxDailySwipes - used);
   return `${left} swipes left today`;
+}
+
+export function upgradePlanHint(featureKey) {
+  const hints = {
+    seeWhoLiked: 'Collab Pro',
+    advancedFilters: 'Collab Pro',
+    superLike: 'Collab Pro',
+    location: 'Creator Passport',
+    directMessage: 'Creator Elite',
+    videos: 'Collab Pro',
+    swipes: 'Collab Pro',
+  };
+  return hints[featureKey] || 'a paid plan';
 }

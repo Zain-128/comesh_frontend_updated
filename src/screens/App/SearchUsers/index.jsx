@@ -24,7 +24,7 @@ const PAGE_SIZE = 20;
 
 function UserSearchRow({ item, onPress }) {
   const [imgFail, setImgFail] = useState(false);
-  const name = [item.firstName, item.lastName].filter(Boolean).join(" ").trim() || "User";
+  const name = helper.getUserDisplayName(item, "User");
   const thumbSrc = helper.getMediaSource(item.profileVideoThumbnail || item.profileImage || item.profileVideo);
   const showUri = thumbSrc && !imgFail;
   const isFemale = item?.gender?.toLowerCase() === 'female';
@@ -40,9 +40,6 @@ function UserSearchRow({ item, onPress }) {
         />
         <View style={styles.rowText}>
           <Typography textType="semiBold" size={16} children={name} />
-          {item.email ? (
-            <Typography textType="light" size={12} color="#999" children={item.email} />
-          ) : null}
           {item.niche ? (
             <Typography textType="light" size={11} color={colors.primary} children={item.niche} />
           ) : null}

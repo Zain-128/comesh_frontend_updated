@@ -1,7 +1,8 @@
 import LottieView from 'lottie-react-native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Toast from 'react-native-toast-message';
 import {
+  Dimensions,
   Image,
   Linking,
   StatusBar,
@@ -23,24 +24,26 @@ import colors from '../../../constants/colors';
 import { IMAGES } from '../../../constants/images';
 import globalActions from '../../../redux/actions/globalActions';
 import { emptyDashData } from '../../../redux/globalSlice';
-import { updateUserLikes } from '../../../redux/userSlice';
 import helper from "../../../utils/helper";
-import {
-  swipeLimitReached,
-  swipesRemainingLabel,
-  effectiveTier,
-  TIERS,
-} from '../../../constants/subscriptionEntitlements';
 import Header from './Header';
+import {
+  performLike,
+  performRewind,
+  performSuperLike,
+  performUnlike,
+} from '../../../utils/likeMessagingActions';
 
 const ITEM_HEIGHT = heightPercentageToDP(100) * 0.725;
 
 const Home = props => {
   const { userData, token } = useSelector(state => state.user);
-  const { dashboard, dashLoading } = useSelector(state => state.globalState);
+  const { dashboard, dashLoading, chats } = useSelector(state => state.globalState);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCIndex] = useState(0);
+  const [canRewind, setCanRewind] = useState(false);
+  const [rewinding, setRewinding] = useState(false);
   const [failedVideoIds, setFailedVideoIds] = useState([]);
+  const swiperRef = useRef(null);
   const dispatch = useDispatch();
   const failedSet = useMemo(() => new Set(failedVideoIds), [failedVideoIds]);
 
@@ -79,81 +82,37 @@ const Home = props => {
     }, 1000)
   }
 
-  const SuperLike = async (userId) => {
-    if (effectiveTier(userData) === TIERS.CREATOR_ACCESS) {
-      Toast.show({
-        type: 'info',
-        text1: 'Collab Pro',
-        text2: 'Super like is available on Collab Pro and above.',
-      });
-      return;
+  const SuperLike = (userId) =>
+    performSuperLike({
+      dispatch,
+      userData,
+      userId,
+      navigation: props.navigation,
+    });
+
+  const Like = (userId) =>
+    performLike({
+      dispatch,
+      userData,
+      userId,
+      navigation: props.navigation,
+      chats,
+    });
+
+  const unLike = (userId) =>
+    performUnlike({ dispatch, userId });
+
+  const handleRewind = async () => {
+    if (rewinding || !canRewind) return;
+    setRewinding(true);
+    const rewoundUser = await performRewind({ dispatch });
+    setRewinding(false);
+    if (rewoundUser?._id) {
+      setCanRewind(false);
+      setCIndex((idx) => Math.max(0, idx - 1));
+      swiperRef.current?.swipeBack?.();
     }
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.SuperLikeUser({
-      userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({
-            userId,
-            type: "like"
-          }))
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
-
-  }
-
-  const Like = async (userId) => {
-    if (swipeLimitReached(userData)) {
-      Toast.show({
-        type: 'info',
-        text1: 'Daily limit',
-        text2: `${swipesRemainingLabel(userData)}. Upgrade to Collab Pro for unlimited swipes.`,
-      });
-      return;
-    }
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.likeUser({
-      userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({
-            userId,
-            type: "like"
-          }))
-          dispatch(globalActions.GetChats({ callback: () => { } }));
-          dispatch(globalActions.getLikesUsers({ callback: () => { } }));
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
-
-  }
-
-  const unLike = async (userId) => {
-    //dispatch(setLoader(true))
-    await dispatch(globalActions.unLikeUser({
-      userId,
-      callback: (data) => {
-        console.warn(data)
-        if (data.success) {
-          dispatch(updateUserLikes({
-            userId,
-            type: "unlike"
-          }))
-        }
-      }
-    }));
-    //dispatch(setLoader(false));
-
-  }
-
-
-
-  //[images.dummy_video5, images.dummy_video4, images.dummy_video2]
+  };
   return (
     <AppContainer>
       <Header />
@@ -171,16 +130,22 @@ const Home = props => {
             </View>
             :
             dashboard?.data?.length > 0 ?
+              <View style={{ flex: 1 }}>
               <Swiper
+                ref={swiperRef}
+                swipeBackCard
                 onSwipedRight={(index) => {
+                  setCanRewind(false);
                   let user = dashboard?.data.find((f, i) => i == index);
                   Like(user?._id)
                 }}
                 onSwipedLeft={(index) => {
+                  setCanRewind(true);
                   let user = dashboard?.data.find((f, i) => i == index);
                   unLike(user?._id)
                 }}
                 onSwipedTop={(index) => {
+                  setCanRewind(false);
                   let user = dashboard?.data.find((f, i) => i == index);
                   SuperLike(user?._id)
                 }}
@@ -252,7 +217,9 @@ const Home = props => {
                   return (
                     <View style={{
                       height: ITEM_HEIGHT,
-                      width: widthPercentageToDP(100)
+                      width: widthPercentageToDP(100),
+                      alignSelf: 'stretch',
+                      overflow: 'hidden',
                     }}>
                       <Video
                         paused={String(card?._id) !== String(activeUserId)}
@@ -267,16 +234,25 @@ const Home = props => {
                           backgroundColor: 'black'
                         }}
                       />
+                      <LinearGradient
+                        pointerEvents="none"
+                        style={styles.profileOverlayGradient}
+                        colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.88)']}
+                        locations={[0, 0.35, 1]}
+                      />
                       <TouchableOpacity
                         activeOpacity={1}
                         style={styles.profileContent}
-                        onPress={() => props.navigation.navigate('UserProfile', { userID: card?._id })}>
-                        <LinearGradient
-                          style={styles.profileOverlay}
-                          colors={['#000000f5', 'transparent', '#000000f5']}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        onPress={() =>
+                          props.navigation.navigate('UserProfile', {
+                            userID: card?._id,
+                            prefillName: helper.getUserDisplayName(card),
+                          })
+                        }>
+                        <View style={styles.profileOverlayInner}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' , width :Dimensions.get('window').width * 1}}>
                             <Typography
-                              children={`${card?.firstName ? card?.firstName : "No"} ${card?.lastName ? card?.lastName : "Name"}`}
+                              children={helper.getUserDisplayName(card, "User")}
                               size={26}
                               color="#fff"
                               textType="bold"
@@ -351,9 +327,7 @@ const Home = props => {
                               </View>
                             ))}
                           </View>
-
-
-                        </LinearGradient>
+                        </View>
                       </TouchableOpacity>
                     </View>
                   )
@@ -373,6 +347,26 @@ const Home = props => {
                 marginTop={0}
               >
               </Swiper>
+              {canRewind ? (
+                <TouchableOpacity
+                  style={styles.rewindBtn}
+                  activeOpacity={0.85}
+                  disabled={rewinding}
+                  onPress={handleRewind}
+                  accessibilityLabel="Rewind last pass">
+                  <View style={styles.rewindBtnInner}>
+                    <AdIcon name="banckward" size={26} color={colors.primary} />
+                  </View>
+                  <Typography
+                    children="Rewind"
+                    size={11}
+                    textType="semiBold"
+                    color={colors.primary}
+                    style={styles.rewindLabel}
+                  />
+                </TouchableOpacity>
+              ) : null}
+              </View>
               :
               <View style={{ height: ITEM_HEIGHT, justifyContent: "center", alignItems: 'center', }}>
                 <Typography children={"No Users"} textType='bold' size={30} color={colors.primary} />
@@ -388,19 +382,55 @@ const Home = props => {
 export default Home;
 
 const styles = StyleSheet.create({
-  profileContent: {
-    height: '100%',
-    width: "100%",
+  profileOverlayGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '58%',
   },
-  profileOverlay: {
-    flex: 1,
+  profileContent: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
     justifyContent: 'flex-end',
-    padding: 30,
+  },
+  profileOverlayInner: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    paddingTop: 12,
   },
   profileBadge: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 25,
     backgroundColor: colors.primaryLight,
+  },
+  rewindBtn: {
+    position: 'absolute',
+    right: 20,
+    bottom: 36,
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  rewindBtnInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  rewindLabel: {
+    marginTop: 4,
   },
 });

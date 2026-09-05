@@ -126,7 +126,7 @@ const Block = props => {
           {report ? `Reporting ` : `Blocking `}
           <Typography
             textType="bold"
-            children={othersProfile?.firstName + " " + othersProfile?.lastName + "?"}
+            children={`${helper.getUserDisplayName(othersProfile, "this user")}?`}
             color={colors.secondary}
             align="center"
           />

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, StatusBar, StyleSheet } from 'react-native';
 import RenderHtml from 'react-native-render-html';
 import { useDispatch, useSelector } from 'react-redux';
@@ -8,43 +8,44 @@ import { AppContainer } from '../../../components/layouts/AppContainer';
 import Actions from "../../../redux/actions/globalActions";
 import { setLoader } from '../../../redux/globalSlice';
 import { ContentType } from '../../../constants/endPoints';
+import { LEGAL_PAGE_URLS } from '../../../constants/legalPages';
+
+const WEBVIEW_BY_TYPE = {
+  [ContentType.ABOUT_US]: LEGAL_PAGE_URLS.about,
+  [ContentType.TERMS_AND_CONDITIONS]: LEGAL_PAGE_URLS.terms,
+  [ContentType.PRIVACY_POLICY]: LEGAL_PAGE_URLS.privacy,
+};
 
 const Policies = props => {
-
-  const { title, type } = props.route?.params || {}
+  const { title, type } = props.route?.params || {};
   const { staticContent } = useSelector(state => state.globalState);
   const dispatch = useDispatch();
+
+  const webUrl = useMemo(
+    () => (type ? WEBVIEW_BY_TYPE[type] : null),
+    [type],
+  );
 
   useEffect(() => {
     StatusBar.setBarStyle('light-content');
     getData();
-  }, [type]);
+  }, [type, webUrl]);
 
   const getData = async () => {
-    if (type === ContentType.ABOUT_US || type === ContentType.TERMS_AND_CONDITIONS) {
-      return; // No need to fetch static content since we are using WebView
-    }
-    dispatch(setLoader(true))
+    if (webUrl) return;
+    dispatch(setLoader(true));
     await dispatch(Actions.getStaticContent(type));
-    dispatch(setLoader(false))
-  }
-
-  const getUrl = () => {
-    if (type === ContentType.TERMS_AND_CONDITIONS) return 'https://comesh-support.vercel.app/terms';
-    if (type === ContentType.ABOUT_US) return 'https://comesh-support.vercel.app/about';
-    // Fallback or potentially add privacy policy later
-    return null; 
-  }
-
-  const webUrl = getUrl();
+    dispatch(setLoader(false));
+  };
 
   return (
     <AppContainer>
       <SimpleHeader {...props} title={title} />
       {webUrl ? (
-        <WebView 
-          source={{ uri: webUrl }} 
-          style={{ flex: 1 }} 
+        <WebView
+          source={{ uri: webUrl }}
+          style={{ flex: 1 }}
+          startInLoadingState
         />
       ) : (
         <ScrollView
@@ -52,9 +53,9 @@ const Policies = props => {
           contentContainerStyle={{ padding: 20, gap: 20 }}>
           <RenderHtml
             source={{
-              html: staticContent ? staticContent : `
-            <h1>No Content Available</h1>
-            `
+              html: staticContent
+                ? staticContent
+                : `<h1>No Content Available</h1>`,
             }}
           />
         </ScrollView>
@@ -65,5 +66,4 @@ const Policies = props => {
 
 export default Policies;
 
-const styles = StyleSheet.create({
-});
+const styles = StyleSheet.create({});

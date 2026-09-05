@@ -7,6 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import colors from './constants/colors';
+import MatchNotificationModalHost from './components/MatchNotificationModalHost';
 import RootStack from './navigation/RootStack';
 import {
   registerBackgroundHandler,
@@ -64,6 +65,7 @@ const App = () => {
               </PersistGate>
             </Provider>
           </SafeAreaView>
+          <MatchNotificationModalHost />
           <Toast />
         </View>
       </SafeAreaProvider>

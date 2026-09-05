@@ -60,8 +60,7 @@ const getReplySnippet = (reply) => {
 const replyAuthorLabel = (reply, userData, otherUser) => {
   const fid = reply?.from?._id != null ? reply.from._id : reply?.from;
   if (fid != null && String(fid) === String(userData?._id)) return "You";
-  const n = [otherUser?.firstName, otherUser?.lastName].filter(Boolean).join(" ").trim();
-  return n || "User";
+  return helper.getUserDisplayName(otherUser, "User");
 };
 
 const Messages = (props) => {
@@ -488,11 +487,7 @@ const Messages = (props) => {
         />
         <View style={styles.flex1}>
           <Typography
-            children={
-              routeItem?.usersData?.length > 0
-                ? `${routeItem.usersData[0].firstName} ${routeItem.usersData[0].lastName}`
-                : "Chat"
-            }
+            children={helper.getUserDisplayName(otherUser, "Chat")}
             size={16}
             textType="semiBold"
           />
